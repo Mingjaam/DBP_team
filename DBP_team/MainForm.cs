@@ -13,10 +13,12 @@ namespace DBP_team
         private string _companyName;
         private string _userName;
         private bool _initializedFromCtor;
+        private int _userId; // 로그인된 사용자 id
 
         public MainForm()
         {
             InitializeComponent();
+            HookTreeEvents();
         }
 
         // User 객체로 초기화
@@ -24,6 +26,7 @@ namespace DBP_team
         {
             if (user == null) throw new ArgumentNullException(nameof(user));
 
+            _userId = user.Id;
             _companyId = user.CompanyId ?? 0;
             _userName = string.IsNullOrWhiteSpace(user.FullName) ? user.Email : user.FullName;
             _companyName = user.CompanyName; // 로그인 시 전달된 companyName 우선 사용
@@ -87,6 +90,42 @@ namespace DBP_team
             }
         }
 
+        // 트리뷰 더블클릭 이벤트 훅
+        private void HookTreeEvents()
+        {
+            treeViewUser.NodeMouseDoubleClick -= TreeViewUser_NodeMouseDoubleClick;
+            treeViewUser.NodeMouseDoubleClick += TreeViewUser_NodeMouseDoubleClick;
+        }
+
+        // 트리 노드 더블클릭 핸들러: user:ID 태그를 파싱해 ChatForm 열기
+        private void TreeViewUser_NodeMouseDoubleClick(object sender, TreeNodeMouseClickEventArgs e)
+        {
+            if (e.Node == null) return;
+            var tag = e.Node.Tag as string;
+            if (string.IsNullOrWhiteSpace(tag)) return;
+
+            // tag 형식: "user:123"
+            if (tag.StartsWith("user:", StringComparison.OrdinalIgnoreCase))
+            {
+                var parts = tag.Split(':');
+                if (parts.Length == 2 && int.TryParse(parts[1], out int otherId))
+                {
+                    var otherName = e.Node.Text;
+                    // 로그인된 사용자 id(_userId) 가 있어야 함
+                    if (_userId <= 0)
+                    {
+                        MessageBox.Show("로그인 사용자 정보가 없습니다.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        return;
+                    }
+
+                    var chat = new ChatForm(_userId, otherId, otherName);
+                    chat.StartPosition = FormStartPosition.CenterParent;
+                    chat.Show(this);
+                }
+            }
+        }
+
+        // 기존 LoadCompanyTree() 메서드 그대로 유지
         private void LoadCompanyTree()
         {
             treeViewUser.BeginUpdate();

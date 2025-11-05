@@ -30,6 +30,8 @@
         {
             this.listChat = new System.Windows.Forms.ListView();
             this.labelChat = new System.Windows.Forms.Label();
+            this.txtChat = new System.Windows.Forms.TextBox();
+            this.btnSend = new System.Windows.Forms.Button();
             this.SuspendLayout();
             // 
             // listChat
@@ -37,7 +39,7 @@
             this.listChat.HideSelection = false;
             this.listChat.Location = new System.Drawing.Point(39, 79);
             this.listChat.Name = "listChat";
-            this.listChat.Size = new System.Drawing.Size(304, 434);
+            this.listChat.Size = new System.Drawing.Size(523, 434);
             this.listChat.TabIndex = 0;
             this.listChat.UseCompatibleStateImageBehavior = false;
             this.listChat.SelectedIndexChanged += new System.EventHandler(this.listView1_SelectedIndexChanged);
@@ -51,11 +53,30 @@
             this.labelChat.TabIndex = 1;
             this.labelChat.Text = "label1";
             // 
+            // txtChat
+            // 
+            this.txtChat.Location = new System.Drawing.Point(39, 532);
+            this.txtChat.Name = "txtChat";
+            this.txtChat.Size = new System.Drawing.Size(442, 21);
+            this.txtChat.TabIndex = 2;
+            // 
+            // btnSend
+            // 
+            this.btnSend.Location = new System.Drawing.Point(487, 530);
+            this.btnSend.Name = "btnSend";
+            this.btnSend.Size = new System.Drawing.Size(75, 23);
+            this.btnSend.TabIndex = 3;
+            this.btnSend.Text = "전송";
+            this.btnSend.UseVisualStyleBackColor = true;
+            this.btnSend.Click += new System.EventHandler(this.button1_Click);
+            // 
             // ChatForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 12F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(389, 582);
+            this.ClientSize = new System.Drawing.Size(584, 582);
+            this.Controls.Add(this.btnSend);
+            this.Controls.Add(this.txtChat);
             this.Controls.Add(this.labelChat);
             this.Controls.Add(this.listChat);
             this.Name = "ChatForm";
@@ -69,5 +90,7 @@
 
         private System.Windows.Forms.ListView listChat;
         private System.Windows.Forms.Label labelChat;
+        private System.Windows.Forms.TextBox txtChat;
+        private System.Windows.Forms.Button btnSend;
     }
 }
