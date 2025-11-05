@@ -3,6 +3,7 @@ using System.Data;
 using System.Drawing;
 using System.Windows.Forms;
 using MySql.Data.MySqlClient;
+using DBP_team.Models;
 
 namespace DBP_team
 {
@@ -39,28 +40,22 @@ namespace DBP_team
         {
             var reg = new Registerform();
 
-            // 새 폼이 현재 폼과 같은 크기/위치로 뜨도록 설정
+            // 기존 위치/크기 유지
             reg.StartPosition = FormStartPosition.Manual;
             reg.Size = this.Size;
-
             var desired = this.Location;
             var screen = Screen.FromControl(this);
             var bounds = screen.WorkingArea;
 
-            // X 보정
             if (desired.X < bounds.Left) desired.X = bounds.Left;
             if (desired.X + reg.Width > bounds.Right) desired.X = Math.Max(bounds.Left, bounds.Right - reg.Width);
-
-            // Y 보정
             if (desired.Y < bounds.Top) desired.Y = bounds.Top;
             if (desired.Y + reg.Height > bounds.Bottom) desired.Y = Math.Max(bounds.Top, bounds.Bottom - reg.Height);
 
             reg.Location = desired;
 
-            // 닫힐 때 로그인 폼을 reg과 동일한 위치/크기로 맞춘 뒤 다시 보이게 처리
             reg.FormClosed += (s, args) =>
             {
-                // 위치/크기 복사
                 this.StartPosition = FormStartPosition.Manual;
                 this.Size = reg.Size;
 
@@ -98,7 +93,8 @@ namespace DBP_team
             try
             {
                 var dt = DBManager.Instance.ExecuteDataTable(
-                    "SELECT id, password_hash, full_name, role FROM users WHERE email = @email",
+                    "SELECT u.id, u.password_hash, u.full_name, u.role, u.company_id, c.name AS company_name, u.email " +
+                    "FROM users u LEFT JOIN companies c ON u.company_id = c.id WHERE u.email = @email",
                     new MySqlParameter("@email", email));
 
                 if (dt == null || dt.Rows.Count == 0)
@@ -116,18 +112,33 @@ namespace DBP_team
                     return;
                 }
 
-                // 로그인 성공: last_login 업데이트
+                // 마지막 로그인 시간 업데이트
                 DBManager.Instance.ExecuteNonQuery("UPDATE users SET last_login = NOW() WHERE id = @id",
                     new MySqlParameter("@id", Convert.ToInt32(row["id"])));
 
-                // 성공 메시지 명확히 표시
-                var fullName = row["full_name"]?.ToString() ?? email;
-                MessageBox.Show($"{fullName}님, 로그인 성공했습니다.", "로그인 성공", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                // User 객체 생성
+                var user = new User
+                {
+                    Id = Convert.ToInt32(row["id"]),
+                    FullName = row["full_name"]?.ToString(),
+                    Role = row["role"]?.ToString(),
+                    Email = row["email"]?.ToString(),
+                    CompanyId = row["company_id"] == DBNull.Value ? 0 : Convert.ToInt32(row["company_id"]),
+                    CompanyName = row["company_name"] == DBNull.Value ? null : row["company_name"].ToString()
+                };
 
-                // 필요하면 여기서 메인 폼으로 전환
-                // this.Hide();
-                // var main = new MainForm(...);
-                // main.Show();
+                // MainForm으로 전달
+                var main = new MainForm(user);
+
+                // 위치/크기 동기화(선택)
+                main.StartPosition = FormStartPosition.Manual;
+                main.Size = this.Size;
+                main.Location = this.Location;
+
+                main.FormClosed += (s, args) => this.Close();
+
+                this.Hide();
+                main.Show();
             }
             catch (Exception ex)
             {
