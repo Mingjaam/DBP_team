@@ -31,13 +31,15 @@
             this.treeViewUser = new System.Windows.Forms.TreeView();
             this.labelCompany = new System.Windows.Forms.Label();
             this.labelName = new System.Windows.Forms.Label();
+            this.btnSelfChat = new System.Windows.Forms.Button();
+            this.btnProfile = new System.Windows.Forms.Button();
             this.SuspendLayout();
             // 
             // treeViewUser
             // 
             this.treeViewUser.Location = new System.Drawing.Point(34, 103);
             this.treeViewUser.Name = "treeViewUser";
-            this.treeViewUser.Size = new System.Drawing.Size(366, 443);
+            this.treeViewUser.Size = new System.Drawing.Size(308, 443);
             this.treeViewUser.TabIndex = 0;
             // 
             // labelCompany
@@ -54,15 +56,36 @@
             this.labelName.AutoSize = true;
             this.labelName.Location = new System.Drawing.Point(32, 40);
             this.labelName.Name = "labelName";
-            this.labelName.Size = new System.Drawing.Size(33, 12);
+            this.labelName.Size = new System.Drawing.Size(30, 12);
             this.labelName.TabIndex = 2;
             this.labelName.Text = "user";
+            // 
+            // btnSelfChat
+            // 
+            this.btnSelfChat.Location = new System.Drawing.Point(34, 65);
+            this.btnSelfChat.Name = "btnSelfChat";
+            this.btnSelfChat.Size = new System.Drawing.Size(83, 23);
+            this.btnSelfChat.TabIndex = 3;
+            this.btnSelfChat.Text = "나와의 채팅";
+            this.btnSelfChat.UseVisualStyleBackColor = true;
+            // 
+            // btnProfile
+            // 
+            this.btnProfile.Location = new System.Drawing.Point(292, 18);
+            this.btnProfile.Name = "btnProfile";
+            this.btnProfile.Size = new System.Drawing.Size(50, 34);
+            this.btnProfile.TabIndex = 4;
+            this.btnProfile.Text = "프로필";
+            this.btnProfile.UseVisualStyleBackColor = true;
+            this.btnProfile.Click += new System.EventHandler(this.button1_Click);
             // 
             // MainForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 12F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(439, 586);
+            this.ClientSize = new System.Drawing.Size(379, 626);
+            this.Controls.Add(this.btnProfile);
+            this.Controls.Add(this.btnSelfChat);
             this.Controls.Add(this.labelName);
             this.Controls.Add(this.labelCompany);
             this.Controls.Add(this.treeViewUser);
@@ -79,5 +102,7 @@
         private System.Windows.Forms.TreeView treeViewUser;
         private System.Windows.Forms.Label labelCompany;
         private System.Windows.Forms.Label labelName;
+        private System.Windows.Forms.Button btnSelfChat;
+        private System.Windows.Forms.Button btnProfile;
     }
 }

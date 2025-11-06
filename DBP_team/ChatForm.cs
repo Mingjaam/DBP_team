@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Data;
+using System.Drawing;
 using System.Windows.Forms;
 using MySql.Data.MySqlClient;
+using DBP_team.Controls;
 
 namespace DBP_team
 {
@@ -10,6 +12,7 @@ namespace DBP_team
         private readonly int _myUserId;
         private readonly int _otherUserId;
         private readonly string _otherName;
+        private FlowLayoutPanel _flow;
 
         public ChatForm(int myUserId, int otherUserId, string otherName)
         {
@@ -19,18 +22,45 @@ namespace DBP_team
             _otherUserId = otherUserId;
             _otherName = string.IsNullOrWhiteSpace(otherName) ? "상대" : otherName;
 
-            // UI 초기화
             labelChat.Text = _otherName;
 
-            // ListView 설정 (디자이너에 컬럼 없을 수 있어 코드에서 안전하게 설정)
-            listChat.View = View.Details;
-            listChat.FullRowSelect = true;
-            listChat.HeaderStyle = ColumnHeaderStyle.Nonclickable;
-            listChat.Columns.Clear();
-            listChat.Columns.Add("시간", 140);
-            listChat.Columns.Add("보낸사람", 80);
-            listChat.Columns.Add("메시지", 400);
-            listChat.MultiSelect = false;
+            // 기존 listChat(디자이너)에 의존하므로 숨기고 FlowLayoutPanel을 추가
+            if (this.Controls.Contains(listChat)) listChat.Visible = false;
+
+            _flow = new FlowLayoutPanel
+            {
+                Location = listChat.Location,
+                Size = listChat.Size,
+                Anchor = listChat.Anchor,
+                AutoScroll = true,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                Padding = new Padding(0),
+                BackColor = listChat.BackColor
+            };
+
+            this.Controls.Add(_flow);
+            _flow.BringToFront();
+
+            _flow.Resize += (s, e) =>
+            {
+                // 폭 변경 시 각 bubble 재계산
+                foreach (Control c in _flow.Controls)
+                {
+                    if (c is ChatBubbleControl bubble)
+                    {
+                        // Tag에 저장된 데이터로 재설정
+                        var t = bubble.Tag as Tuple<string, DateTime, bool, int>;
+                        if (t != null)
+                        {
+                            bubble.Width = _flow.ClientSize.Width;
+                            bubble.SetData(t.Item1, t.Item2, t.Item3, _flow.ClientSize.Width);
+                        }
+                    }
+                }
+            };
+
+            btnSend.Text = "전송";
 
             LoadMessages();
         }
@@ -47,30 +77,29 @@ namespace DBP_team
                     new MySqlParameter("@me", _myUserId),
                     new MySqlParameter("@other", _otherUserId));
 
-                listChat.Items.Clear();
+                _flow.Controls.Clear();
 
                 if (dt == null || dt.Rows.Count == 0)
                 {
-                    var li = new ListViewItem(new[] { "", "", "대화가 없습니다." });
-                    listChat.Items.Add(li);
+                    var lbl = new Label { Text = "대화가 없습니다.", AutoSize = true, ForeColor = Color.Gray, Margin = new Padding(10) };
+                    _flow.Controls.Add(lbl);
                     return;
                 }
 
                 foreach (DataRow r in dt.Rows)
                 {
-                    var time = r["created_at"] == DBNull.Value ? "" : Convert.ToDateTime(r["created_at"]).ToString("yyyy-MM-dd HH:mm");
+                    var id = Convert.ToInt32(r["id"]);
+                    var time = r["created_at"] == DBNull.Value ? DateTime.Now : Convert.ToDateTime(r["created_at"]);
                     var senderId = Convert.ToInt32(r["sender_id"]);
-                    var who = senderId == _myUserId ? "나" : _otherName;
-                    var msg = r["message"]?.ToString() ?? "";
+                    var whoMine = senderId == _myUserId;
+                    var message = r["message"]?.ToString() ?? "";
 
-                    var item = new ListViewItem(new[] { time, who, msg });
-                    item.Tag = r["id"];
-                    listChat.Items.Add(item);
+                    var bubble = CreateBubble(message, time, whoMine, id);
+                    _flow.Controls.Add(bubble);
                 }
 
-                // 최신 메시지가 아래에 오도록 마지막 항목이 보이게 함
-                if (listChat.Items.Count > 0)
-                    listChat.EnsureVisible(listChat.Items.Count - 1);
+                if (_flow.Controls.Count > 0)
+                    _flow.ScrollControlIntoView(_flow.Controls[_flow.Controls.Count - 1]);
             }
             catch (Exception ex)
             {
@@ -78,13 +107,30 @@ namespace DBP_team
             }
         }
 
-        // 디자이너에서 연결된 이벤트 이름 유지: listView1_SelectedIndexChanged
-        private void listView1_SelectedIndexChanged(object sender, EventArgs e)
+        private ChatBubbleControl CreateBubble(string message, DateTime time, bool isMine, int id)
         {
-            // 선택 시 동작이 필요하면 구현
+            var bubble = new ChatBubbleControl();
+            bubble.Width = Math.Max(200, _flow.ClientSize.Width);
+            // tag에 데이터를 저장해 resize 시 재설정에 사용
+            bubble.Tag = Tuple.Create(message, time, isMine, id);
+            bubble.SetData(message, time, isMine, _flow.ClientSize.Width);
+            bubble.Margin = new Padding(0, 6, 0, 6);
+            return bubble;
         }
 
-        // 디자이너에서 btnSend 클릭에 연결된 메서드 이름: button1_Click
+        // 즉시 하단에 새 말풍선 추가 (전송 후 호출)
+        private void AddBubbleImmediate(string message, DateTime time, bool isMine, int id)
+        {
+            var bubble = CreateBubble(message, time, isMine, id);
+            _flow.Controls.Add(bubble);
+            _flow.ScrollControlIntoView(bubble);
+        }
+
+        private void listView1_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            // 필요 시 구현
+        }
+
         private void button1_Click(object sender, EventArgs e)
         {
             var text = txtChat.Text?.Trim();
@@ -102,16 +148,27 @@ namespace DBP_team
                     new MySqlParameter("@r", _otherUserId),
                     new MySqlParameter("@msg", text));
 
-                // 전송 후 입력 초기화 및 최신 메시지 보이도록 다시 로드
+                var sentTime = DateTime.Now;
                 txtChat.Clear();
                 txtChat.Focus();
 
-                LoadMessages();
+                // 즉시 UI에 추가
+                AddBubbleImmediate(text, sentTime, true, 0);
             }
             catch (Exception ex)
             {
                 MessageBox.Show("메시지 전송 중 오류: " + ex.Message, "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private void txtChat_TextChanged(object sender, EventArgs e)
+        {
+
+        }
+
+        private void ChatForm_Load(object sender, EventArgs e)
+        {
+
         }
     }
 }

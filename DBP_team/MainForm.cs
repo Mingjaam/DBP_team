@@ -4,7 +4,6 @@ using System.Windows.Forms;
 using MySql.Data.MySqlClient;
 using DBP_team.Models;
 
-
 namespace DBP_team
 {
     public partial class MainForm : Form
@@ -19,6 +18,28 @@ namespace DBP_team
         {
             InitializeComponent();
             HookTreeEvents();
+
+            // Self chat 버튼 이벤트 연결 (디자이너에 btnSelfChat이 있어야 합니다)
+            try
+            {
+                this.btnSelfChat.Click -= btnSelfChat_Click;
+                this.btnSelfChat.Click += btnSelfChat_Click;
+            }
+            catch
+            {
+                // btnSelfChat이 없으면 무시 (디자이너 이름 확인)
+            }
+
+            // 프로필 버튼 이벤트 이미 디자이너에 연결되어 있을 수 있으므로 안전하게 연결
+            try
+            {
+                this.btnProfile.Click -= button1_Click;
+                this.btnProfile.Click += button1_Click;
+            }
+            catch
+            {
+                // 무시
+            }
         }
 
         // User 객체로 초기화
@@ -125,7 +146,36 @@ namespace DBP_team
             }
         }
 
-        // 기존 LoadCompanyTree() 메서드 그대로 유지
+        // btnSelfChat 클릭 핸들러: 본인과의 채팅창 열기
+        private void btnSelfChat_Click(object sender, EventArgs e)
+        {
+            if (_userId <= 0)
+            {
+                MessageBox.Show("로그인 사용자 정보가 없습니다.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            var displayName = string.IsNullOrWhiteSpace(_userName) ? "나" : _userName;
+            var chat = new ChatForm(_userId, _userId, displayName);
+            chat.StartPosition = FormStartPosition.CenterParent;
+            chat.Show(this);
+        }
+
+        // 프로필 버튼 클릭: 프로필 폼 열기
+        private void button1_Click(object sender, EventArgs e)
+        {
+            if (_userId <= 0)
+            {
+                MessageBox.Show("로그인 사용자 정보가 없습니다.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            var pf = new ProfileForm(_userId);
+            pf.StartPosition = FormStartPosition.CenterParent;
+            pf.ShowDialog(this);
+        }
+
+        // 기존 LoadCompanyTree() 메서드 수정: 로그인 사용자는 노드에 추가하지 않음
         private void LoadCompanyTree()
         {
             treeViewUser.BeginUpdate();
@@ -177,9 +227,13 @@ namespace DBP_team
                             {
                                 foreach (DataRow u in dtUsersInTeam.Rows)
                                 {
+                                    int uid = Convert.ToInt32(u["id"]);
+                                    // 로그인 사용자면 건너뜀
+                                    if (uid == _userId) continue;
+
                                     var display = u["full_name"]?.ToString();
                                     if (string.IsNullOrWhiteSpace(display)) display = u["email"]?.ToString() ?? "이름 없음";
-                                    var userNode = new TreeNode(display) { Tag = $"user:{u["id"]}" };
+                                    var userNode = new TreeNode(display) { Tag = $"user:{uid}" };
                                     teamNode.Nodes.Add(userNode);
                                 }
                             }
@@ -197,9 +251,13 @@ namespace DBP_team
                     {
                         foreach (DataRow u in dtUsersNoTeam.Rows)
                         {
+                            int uid = Convert.ToInt32(u["id"]);
+                            // 로그인 사용자면 건너뜀
+                            if (uid == _userId) continue;
+
                             var display = u["full_name"]?.ToString();
                             if (string.IsNullOrWhiteSpace(display)) display = u["email"]?.ToString() ?? "이름 없음";
-                            var userNode = new TreeNode(display) { Tag = $"user:{u["id"]}" };
+                            var userNode = new TreeNode(display) { Tag = $"user:{uid}" };
                             depNode.Nodes.Add(userNode);
                         }
                     }
