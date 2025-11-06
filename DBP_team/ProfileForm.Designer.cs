@@ -40,6 +40,10 @@
             this.txtNickname = new System.Windows.Forms.TextBox();
             this.labelNickname = new System.Windows.Forms.Label();
             this.btnSave = new System.Windows.Forms.Button();
+            this.labelPostalCode = new System.Windows.Forms.Label();
+            this.txtAddressMain = new System.Windows.Forms.TextBox();
+            this.txtAddressDetail = new System.Windows.Forms.TextBox();
+            this.btnAddressSearch = new System.Windows.Forms.Button();
             ((System.ComponentModel.ISupportInitialize)(this.pictureProfile)).BeginInit();
             this.SuspendLayout();
             // 
@@ -107,10 +111,10 @@
             // btnClose
             // 
             this.btnClose.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnClose.Location = new System.Drawing.Point(292, 242);
+            this.btnClose.Location = new System.Drawing.Point(392, 312);
             this.btnClose.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
             this.btnClose.Name = "btnClose";
-            this.btnClose.Size = new System.Drawing.Size(88, 21);
+            this.btnClose.Size = new System.Drawing.Size(88, 24);
             this.btnClose.TabIndex = 10;
             this.btnClose.Text = "닫기";
             this.btnClose.UseVisualStyleBackColor = true;
@@ -119,10 +123,10 @@
             // btnChangeImage
             // 
             this.btnChangeImage.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnChangeImage.Location = new System.Drawing.Point(175, 242);
+            this.btnChangeImage.Location = new System.Drawing.Point(272, 312);
             this.btnChangeImage.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
             this.btnChangeImage.Name = "btnChangeImage";
-            this.btnChangeImage.Size = new System.Drawing.Size(110, 21);
+            this.btnChangeImage.Size = new System.Drawing.Size(110, 24);
             this.btnChangeImage.TabIndex = 9;
             this.btnChangeImage.Text = "이미지 변경";
             this.btnChangeImage.UseVisualStyleBackColor = true;
@@ -133,7 +137,7 @@
             this.txtFullName.Location = new System.Drawing.Point(213, 12);
             this.txtFullName.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
             this.txtFullName.Name = "txtFullName";
-            this.txtFullName.Size = new System.Drawing.Size(163, 21);
+            this.txtFullName.Size = new System.Drawing.Size(267, 21);
             this.txtFullName.TabIndex = 11;
             // 
             // txtNickname
@@ -141,7 +145,7 @@
             this.txtNickname.Location = new System.Drawing.Point(213, 38);
             this.txtNickname.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
             this.txtNickname.Name = "txtNickname";
-            this.txtNickname.Size = new System.Drawing.Size(163, 21);
+            this.txtNickname.Size = new System.Drawing.Size(267, 21);
             this.txtNickname.TabIndex = 12;
             // 
             // labelNickname
@@ -156,20 +160,61 @@
             // 
             // btnSave
             // 
-            this.btnSave.Location = new System.Drawing.Point(175, 181);
+            this.btnSave.Location = new System.Drawing.Point(272, 272);
             this.btnSave.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
             this.btnSave.Name = "btnSave";
-            this.btnSave.Size = new System.Drawing.Size(110, 21);
+            this.btnSave.Size = new System.Drawing.Size(110, 28);
             this.btnSave.TabIndex = 14;
             this.btnSave.Text = "저장";
             this.btnSave.UseVisualStyleBackColor = true;
             this.btnSave.Click += new System.EventHandler(this.btnSave_Click);
             // 
+            // labelPostalCode
+            // 
+            this.labelPostalCode.AutoSize = true;
+            this.labelPostalCode.Location = new System.Drawing.Point(16, 132);
+            this.labelPostalCode.Name = "labelPostalCode";
+            this.labelPostalCode.Size = new System.Drawing.Size(67, 12);
+            this.labelPostalCode.TabIndex = 15;
+            this.labelPostalCode.Text = "우편번호: -";
+            // 
+            // txtAddressMain
+            // 
+            this.txtAddressMain.Location = new System.Drawing.Point(12, 186);
+            this.txtAddressMain.Multiline = true;
+            this.txtAddressMain.Name = "txtAddressMain";
+            this.txtAddressMain.ReadOnly = true;
+            this.txtAddressMain.Size = new System.Drawing.Size(350, 42);
+            this.txtAddressMain.TabIndex = 16;
+            // 
+            // txtAddressDetail
+            // 
+            this.txtAddressDetail.Location = new System.Drawing.Point(14, 234);
+            this.txtAddressDetail.Name = "txtAddressDetail";
+            this.txtAddressDetail.Size = new System.Drawing.Size(350, 21);
+            this.txtAddressDetail.TabIndex = 17;
+            this.txtAddressDetail.Visible = false;
+            this.txtAddressDetail.TextChanged += new System.EventHandler(this.txtAddressDetail_TextChanged);
+            // 
+            // btnAddressSearch
+            // 
+            this.btnAddressSearch.Location = new System.Drawing.Point(373, 186);
+            this.btnAddressSearch.Name = "btnAddressSearch";
+            this.btnAddressSearch.Size = new System.Drawing.Size(108, 49);
+            this.btnAddressSearch.TabIndex = 18;
+            this.btnAddressSearch.Text = "주소 변경";
+            this.btnAddressSearch.UseVisualStyleBackColor = true;
+            this.btnAddressSearch.Click += new System.EventHandler(this.btnAddressSearch_Click);
+            // 
             // ProfileForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 12F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(397, 274);
+            this.ClientSize = new System.Drawing.Size(493, 349);
+            this.Controls.Add(this.btnAddressSearch);
+            this.Controls.Add(this.txtAddressDetail);
+            this.Controls.Add(this.txtAddressMain);
+            this.Controls.Add(this.labelPostalCode);
             this.Controls.Add(this.btnClose);
             this.Controls.Add(this.btnChangeImage);
             this.Controls.Add(this.btnSave);
@@ -210,5 +255,9 @@
         private System.Windows.Forms.TextBox txtNickname;
         private System.Windows.Forms.Label labelNickname;
         private System.Windows.Forms.Button btnSave;
+        private System.Windows.Forms.Label labelPostalCode;
+        private System.Windows.Forms.TextBox txtAddressMain;
+        private System.Windows.Forms.TextBox txtAddressDetail;
+        private System.Windows.Forms.Button btnAddressSearch;
     }
 }

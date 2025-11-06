@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Drawing;
 using System.IO;
@@ -16,28 +17,21 @@ namespace DBP_team
             InitializeComponent();
             _userId = userId;
 
-            // 디자이너 컨트롤 확인, 디버그 텍스트는 제거하여 라벨을 덮어쓰지 않음
             if (pictureProfile == null || labelFullName == null)
             {
                 MessageBox.Show("디자이너 컨트롤이 초기화되지 않았습니다. Designer 파일과 namespace를 확인하세요.", "디버그", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             else
             {
-                // 사진 배경만 표시
                 pictureProfile.BackColor = Color.LightGray;
             }
 
-            // btnClose가 디자이너에 없을 수 있으므로 안전하게 연결
             try { this.btnClose.Click -= btnClose_Click; this.btnClose.Click += btnClose_Click; } catch { }
-
-            // btnChangeImage가 디자이너에 없을 수 있으므로 안전하게 연결
             try { this.btnChangeImage.Click -= btnChangeImage_Click; this.btnChangeImage.Click += btnChangeImage_Click; } catch { }
-
-            // save 버튼이 있으면 연결
             try { this.btnSave.Click -= btnSave_Click; this.btnSave.Click += btnSave_Click; } catch { }
+            try { this.btnAddressSearch.Click -= btnAddressSearch_Click; this.btnAddressSearch.Click += btnAddressSearch_Click; } catch { }
         }
 
-        // 디자이너에서 Load 이벤트로 연결되어 있음
         private void ProfileForm_Load(object sender, EventArgs e)
         {
             LoadProfile();
@@ -48,7 +42,7 @@ namespace DBP_team
             try
             {
                 var dt = DBManager.Instance.ExecuteDataTable(
-                    "SELECT u.id, u.full_name, u.nickname, u.email, u.phone, u.profile_image, " +
+                    "SELECT u.id, u.full_name, u.nickname, u.email, u.phone, u.profile_image, u.address, u.zipNo, " +
                     "c.name AS company_name, d.name AS department_name, t.name AS team_name " +
                     "FROM users u " +
                     "LEFT JOIN companies c ON u.company_id = c.id " +
@@ -66,8 +60,6 @@ namespace DBP_team
 
                 var row = dt.Rows[0];
 
-                // 라벨들은 디자이너에서 고정 텍스트("이름 :", "별명 :")를 유지하도록 한다.
-                // 텍스트박스에만 실제 값을 채워준다.
                 var fullName = row.Table.Columns.Contains("full_name") ? row["full_name"]?.ToString() : string.Empty;
                 if (txtFullName != null)
                     txtFullName.Text = fullName ?? string.Empty;
@@ -77,19 +69,84 @@ namespace DBP_team
                 labelDepartment.Text = "부서: " + (row["department_name"]?.ToString() ?? "(없음)");
                 labelTeam.Text = "팀: " + (row["team_name"]?.ToString() ?? "(없음)");
 
-                // nickname 표시: 라벨은 고정, 텍스트박스에만 할당
                 try
                 {
                     var nick = row.Table.Columns.Contains("nickname") ? row["nickname"]?.ToString() : null;
                     if (txtNickname != null)
-                    {
                         txtNickname.Text = !string.IsNullOrWhiteSpace(nick) ? nick : string.Empty;
-                    }
                 }
                 catch { }
 
-                // 프로필 이미지 로드 (BLOB -> Image)
-                if (row["profile_image"] != DBNull.Value && row["profile_image"] is byte[])
+                // Address fields: try several possible column names and show as up to two lines.
+                try
+                {
+                    string address = null;
+                    string zip = null;
+
+                    // common address column names fallback
+                    var addrCols = new[] { "address", "addr", "address_main", "address1", "full_address" };
+                    foreach (var c in addrCols)
+                    {
+                        if (row.Table.Columns.Contains(c) && row[c] != DBNull.Value)
+                        {
+                            address = row[c]?.ToString();
+                            break;
+                        }
+                    }
+
+                    // detail column fallback (not shown until edit)
+                    var detailCols = new[] { "address_detail", "addr_detail", "address2", "detail_address" };
+                    string detail = null;
+                    foreach (var c in detailCols)
+                    {
+                        if (row.Table.Columns.Contains(c) && row[c] != DBNull.Value)
+                        {
+                            detail = row[c]?.ToString();
+                            break;
+                        }
+                    }
+
+                    // zip fallback
+                    var zipCols = new[] { "zipNo", "zipcode", "postal", "postal_code" };
+                    foreach (var c in zipCols)
+                    {
+                        if (row.Table.Columns.Contains(c) && row[c] != DBNull.Value)
+                        {
+                            zip = row[c]?.ToString();
+                            break;
+                        }
+                    }
+
+                    // if address still null, try to compose from components (si/sgg/emd/rn)
+                    if (string.IsNullOrWhiteSpace(address))
+                    {
+                        var parts = new List<string>();
+                        if (row.Table.Columns.Contains("siNm") && row["siNm"] != DBNull.Value) parts.Add(row["siNm"].ToString());
+                        if (row.Table.Columns.Contains("sggNm") && row["sggNm"] != DBNull.Value) parts.Add(row["sggNm"].ToString());
+                        if (row.Table.Columns.Contains("emdNm") && row["emdNm"] != DBNull.Value) parts.Add(row["emdNm"].ToString());
+                        if (row.Table.Columns.Contains("rn") && row["rn"] != DBNull.Value) parts.Add(row["rn"].ToString());
+                        if (parts.Count > 0) address = string.Join(" ", parts);
+                    }
+
+                    // display
+                    txtAddressMain.Text = FormatAddressForDisplay(address);
+                    // if detail column exists, show it (user can edit)
+                    if (!string.IsNullOrWhiteSpace(detail))
+                    {
+                        txtAddressDetail.Text = detail;
+                        txtAddressDetail.Visible = true;
+                    }
+                    else
+                    {
+                        txtAddressDetail.Text = string.Empty;
+                        txtAddressDetail.Visible = false;
+                    }
+
+                    labelPostalCode.Text = "우편번호: " + (zip ?? "-");
+                }
+                catch { }
+
+                if (row.Table.Columns.Contains("profile_image") && row["profile_image"] != DBNull.Value && row["profile_image"] is byte[])
                 {
                     var bytes = (byte[])row["profile_image"];
                     using (var ms = new MemoryStream(bytes))
@@ -97,9 +154,7 @@ namespace DBP_team
                         try
                         {
                             var img = Image.FromStream(ms);
-                            // make copy to avoid stream dependency
-                            var bmp = new Bitmap(img);
-                            pictureProfile.Image = bmp;
+                            pictureProfile.Image = new Bitmap(img);
                         }
                         catch
                         {
@@ -118,12 +173,31 @@ namespace DBP_team
             }
         }
 
+        // Helper: split a long address into up to two lines for display
+        private string FormatAddressForDisplay(string address)
+        {
+            if (string.IsNullOrWhiteSpace(address)) return string.Empty;
+            // If address already contains newline, return as-is
+            if (address.Contains("\n")) return address;
+
+            // Try to split near the middle at a space
+            var maxFirstLine = 40; // chars
+            if (address.Length <= maxFirstLine) return address;
+
+            // find last space before maxFirstLine
+            var idx = address.LastIndexOf(' ', Math.Min(address.Length - 1, maxFirstLine));
+            if (idx <= 0) idx = Math.Min(maxFirstLine, address.Length / 2);
+
+            var first = address.Substring(0, idx).Trim();
+            var second = address.Substring(idx).Trim();
+            return first + "\r\n" + second;
+        }
+
         private void btnClose_Click(object sender, EventArgs e)
         {
             this.Close();
         }
 
-        // 이미지 변경 버튼 클릭 핸들러
         private void btnChangeImage_Click(object sender, EventArgs e)
         {
             using (var ofd = new OpenFileDialog())
@@ -134,21 +208,16 @@ namespace DBP_team
 
                 try
                 {
-                    // 안전하게 파일을 열어 Image를 로드한 뒤 독립적인 Bitmap으로 복사
                     Image loadedImage;
                     using (var fs = new FileStream(ofd.FileName, FileMode.Open, FileAccess.Read))
                     using (var tmp = Image.FromStream(fs))
                     {
-                        loadedImage = new Bitmap(tmp); // copy so it doesn't depend on the stream
+                        loadedImage = new Bitmap(tmp);
                     }
 
-                    // 이전 이미지가 있으면 Dispose 해서 파일 잠금/리소스 문제 방지
                     try { pictureProfile.Image?.Dispose(); } catch { }
-
-                    // 미리보기 적용
                     pictureProfile.Image = loadedImage;
 
-                    // 이미지 바이트로 변환 (PNG로 저장)
                     byte[] imgBytes;
                     using (var ms = new MemoryStream())
                     {
@@ -156,20 +225,11 @@ namespace DBP_team
                         imgBytes = ms.ToArray();
                     }
 
-                    // DB에 저장: profile_image 컬럼이 BLOB 타입으로 존재한다고 가정
-                    var sql = "UPDATE users SET profile_image = @img WHERE id = @id";
-                    var p1 = new MySqlParameter("@img", MySqlDbType.Blob) { Value = imgBytes };
-                    var p2 = new MySqlParameter("@id", _userId);
+                    DBManager.Instance.ExecuteNonQuery("UPDATE users SET profile_image = @img WHERE id = @id",
+                        new MySqlParameter("@img", MySqlDbType.Blob) { Value = imgBytes },
+                        new MySqlParameter("@id", _userId));
 
-                    var rows = DBManager.Instance.ExecuteNonQuery(sql, p1, p2);
-                    if (rows > 0)
-                    {
-                        MessageBox.Show("프로필 이미지가 변경되었습니다.", "완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    }
-                    else
-                    {
-                        MessageBox.Show("이미지 업데이트에 실패했습니다. 사용자 레코드를 찾을 수 없습니다.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }
+                    MessageBox.Show("프로필 이미지가 변경되었습니다.", "완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 catch (Exception ex)
                 {
@@ -178,7 +238,23 @@ namespace DBP_team
             }
         }
 
-        // 저장 버튼: 이름/별명 업데이트
+        private void btnAddressSearch_Click(object sender, EventArgs e)
+        {
+            using (var f = new AddressSearchForm(null))
+            {
+                var dr = f.ShowDialog(this);
+                if (dr == DialogResult.OK)
+                {
+                    if (!string.IsNullOrEmpty(f.SelectedPostalCode)) labelPostalCode.Text = "우편번호: " + f.SelectedPostalCode;
+                    if (!string.IsNullOrEmpty(f.SelectedAddress)) txtAddressMain.Text = FormatAddressForDisplay(f.SelectedAddress);
+
+                    // show detail input for user to enter building/apt etc.
+                    txtAddressDetail.Visible = true;
+                    txtAddressDetail.Focus();
+                }
+            }
+        }
+
         private void btnSave_Click(object sender, EventArgs e)
         {
             try
@@ -186,12 +262,23 @@ namespace DBP_team
                 var newName = txtFullName?.Text?.Trim() ?? string.Empty;
                 var newNick = txtNickname?.Text?.Trim();
 
-                var sql = "UPDATE users SET full_name = @name, nickname = @nick WHERE id = @id";
+                // combine main + detail into single address
+                var main = (txtAddressMain.Text ?? string.Empty).Replace("\r\n", " ").Trim();
+                var detail = txtAddressDetail.Visible ? txtAddressDetail.Text?.Trim() : null;
+                var combined = string.IsNullOrWhiteSpace(detail) ? main : (main + " " + detail).Trim();
+
+                // ensure address and zipNo columns exist
+                try { DBManager.Instance.ExecuteNonQuery("ALTER TABLE users ADD COLUMN address TEXT NULL"); } catch { }
+                try { DBManager.Instance.ExecuteNonQuery("ALTER TABLE users ADD COLUMN zipNo VARCHAR(20) NULL"); } catch { }
+
+                var sql = "UPDATE users SET full_name = @name, nickname = @nick, address = @addr, zipNo = @zip WHERE id = @id";
                 var pName = new MySqlParameter("@name", string.IsNullOrWhiteSpace(newName) ? (object)DBNull.Value : newName);
                 var pNick = new MySqlParameter("@nick", string.IsNullOrWhiteSpace(newNick) ? (object)DBNull.Value : newNick);
+                var pAddr = new MySqlParameter("@addr", string.IsNullOrWhiteSpace(combined) ? (object)DBNull.Value : combined);
+                var pZip = new MySqlParameter("@zip", labelPostalCode.Text.Replace("우편번호:", "").Trim() ?? (object)DBNull.Value);
                 var pId = new MySqlParameter("@id", _userId);
 
-                var rows = DBManager.Instance.ExecuteNonQuery(sql, pName, pNick, pId);
+                var rows = DBManager.Instance.ExecuteNonQuery(sql, pName, pNick, pAddr, pZip, pId);
                 if (rows > 0)
                 {
                     MessageBox.Show("프로필 정보가 저장되었습니다.", "완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -209,6 +296,11 @@ namespace DBP_team
         }
 
         private void labelFullName_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void txtAddressDetail_TextChanged(object sender, EventArgs e)
         {
 
         }

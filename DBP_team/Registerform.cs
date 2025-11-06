@@ -30,6 +30,32 @@ namespace DBP_team
                 return;
             }
 
+            // Ensure users table has address and zipNo columns (safe create)
+            try
+            {
+                // check address column
+                var addrExistsObj = DBManager.Instance.ExecuteScalar(
+                    "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'address'");
+                var addrExists = Convert.ToInt32(addrExistsObj);
+                if (addrExists == 0)
+                {
+                    try { DBManager.Instance.ExecuteNonQuery("ALTER TABLE users ADD COLUMN address TEXT NULL"); } catch { }
+                }
+
+                // check zipNo column
+                var zipExistsObj = DBManager.Instance.ExecuteScalar(
+                    "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'zipNo'");
+                var zipExists = Convert.ToInt32(zipExistsObj);
+                if (zipExists == 0)
+                {
+                    try { DBManager.Instance.ExecuteNonQuery("ALTER TABLE users ADD COLUMN zipNo VARCHAR(20) NULL"); } catch { }
+                }
+            }
+            catch
+            {
+                // silently ignore schema check errors; functionality will still attempt to use columns where available
+            }
+
             // 기존 초기화 로직
             comboCompany.DropDownStyle = ComboBoxStyle.DropDownList;
             comboTeam.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -97,19 +123,18 @@ namespace DBP_team
 
         private async void btnAddressSearch_Click(object sender, EventArgs e)
         {
-            var query = txtAddressSearch.Text?.Trim();
-            if (string.IsNullOrWhiteSpace(query))
-            {
-                MessageBox.Show("검색어를 입력하세요.", "입력 오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            // 호출: RESTful 주소 검색 API (예: 우편번호/주소 자동완성). 실제 API 키/URL 필요.
             try
             {
-                var result = await SearchAddressAsync(query);
-                if (!string.IsNullOrEmpty(result.postalCode)) txtPostalCode.Text = result.postalCode;
-                if (!string.IsNullOrEmpty(result.address)) txtAddressDetail.Text = result.address;
+                using (var f = new AddressSearchForm(txtAddressSearch.Text?.Trim()))
+                {
+                    var dr = f.ShowDialog(this);
+                    if (dr == DialogResult.OK)
+                    {
+                        if (!string.IsNullOrEmpty(f.SelectedPostalCode)) txtPostalCode.Text = f.SelectedPostalCode;
+                        // fill main address field only; leave txtAddressDetail for manual input
+                        if (!string.IsNullOrEmpty(f.SelectedAddress)) txtAddressSearch.Text = f.SelectedAddress;
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -192,6 +217,32 @@ namespace DBP_team
                 {
                     // 실패해도 회원가입 자체는 성공으로 둠
                 }
+            }
+
+            // combine main address and detailed address into one field and save to users.address
+            try
+            {
+                var mainAddr = txtAddressSearch.Text?.Trim();
+                var detailAddr = txtAddressDetail.Text?.Trim();
+                var combined = string.IsNullOrWhiteSpace(detailAddr) ? mainAddr : (mainAddr + " " + detailAddr).Trim();
+
+                // ensure address column exists
+                try
+                {
+                    DBManager.Instance.ExecuteNonQuery("ALTER TABLE users ADD COLUMN address TEXT NULL");
+                }
+                catch { }
+
+                if (!string.IsNullOrWhiteSpace(combined))
+                {
+                    DBManager.Instance.ExecuteNonQuery("UPDATE users SET address = @addr WHERE email = @email",
+                        new MySqlParameter("@addr", combined),
+                        new MySqlParameter("@email", email));
+                }
+            }
+            catch
+            {
+                // 주소 저장 실패는 무시
             }
 
             MessageBox.Show("회원가입이 완료되었습니다. 로그인 화면으로 이동합니다.", "완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
