@@ -16,16 +16,14 @@ namespace DBP_team
             InitializeComponent();
             _userId = userId;
 
-            // 디버그: 디자이너에서 만든 컨트롤이 null인지 확인하려면 아래 임시 코드로 확인
+            // 디자이너 컨트롤 확인, 디버그 텍스트는 제거하여 라벨을 덮어쓰지 않음
             if (pictureProfile == null || labelFullName == null)
             {
                 MessageBox.Show("디자이너 컨트롤이 초기화되지 않았습니다. Designer 파일과 namespace를 확인하세요.", "디버그", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             else
             {
-                // 보이는지 확인용 임시 값
-                labelFullName.Text = "디버그 이름 (디자이너 OK)";
-                labelFullName.ForeColor = Color.Red;
+                // 사진 배경만 표시
                 pictureProfile.BackColor = Color.LightGray;
             }
 
@@ -34,6 +32,9 @@ namespace DBP_team
 
             // btnChangeImage가 디자이너에 없을 수 있으므로 안전하게 연결
             try { this.btnChangeImage.Click -= btnChangeImage_Click; this.btnChangeImage.Click += btnChangeImage_Click; } catch { }
+
+            // save 버튼이 있으면 연결
+            try { this.btnSave.Click -= btnSave_Click; this.btnSave.Click += btnSave_Click; } catch { }
         }
 
         // 디자이너에서 Load 이벤트로 연결되어 있음
@@ -47,7 +48,7 @@ namespace DBP_team
             try
             {
                 var dt = DBManager.Instance.ExecuteDataTable(
-                    "SELECT u.id, u.full_name, u.email, u.phone, u.profile_image, " +
+                    "SELECT u.id, u.full_name, u.nickname, u.email, u.phone, u.profile_image, " +
                     "c.name AS company_name, d.name AS department_name, t.name AS team_name " +
                     "FROM users u " +
                     "LEFT JOIN companies c ON u.company_id = c.id " +
@@ -65,11 +66,27 @@ namespace DBP_team
 
                 var row = dt.Rows[0];
 
-                labelFullName.Text = "이름: " + (row["full_name"]?.ToString() ?? "(없음)");
+                // 라벨들은 디자이너에서 고정 텍스트("이름 :", "별명 :")를 유지하도록 한다.
+                // 텍스트박스에만 실제 값을 채워준다.
+                var fullName = row.Table.Columns.Contains("full_name") ? row["full_name"]?.ToString() : string.Empty;
+                if (txtFullName != null)
+                    txtFullName.Text = fullName ?? string.Empty;
+
                 labelEmail.Text = "이메일: " + (row["email"]?.ToString() ?? "(없음)");
                 labelCompany.Text = "회사: " + (row["company_name"]?.ToString() ?? "(없음)");
                 labelDepartment.Text = "부서: " + (row["department_name"]?.ToString() ?? "(없음)");
                 labelTeam.Text = "팀: " + (row["team_name"]?.ToString() ?? "(없음)");
+
+                // nickname 표시: 라벨은 고정, 텍스트박스에만 할당
+                try
+                {
+                    var nick = row.Table.Columns.Contains("nickname") ? row["nickname"]?.ToString() : null;
+                    if (txtNickname != null)
+                    {
+                        txtNickname.Text = !string.IsNullOrWhiteSpace(nick) ? nick : string.Empty;
+                    }
+                }
+                catch { }
 
                 // 프로필 이미지 로드 (BLOB -> Image)
                 if (row["profile_image"] != DBNull.Value && row["profile_image"] is byte[])
@@ -159,6 +176,41 @@ namespace DBP_team
                     MessageBox.Show("이미지 적용 중 오류: " + ex.Message, "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
+        }
+
+        // 저장 버튼: 이름/별명 업데이트
+        private void btnSave_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                var newName = txtFullName?.Text?.Trim() ?? string.Empty;
+                var newNick = txtNickname?.Text?.Trim();
+
+                var sql = "UPDATE users SET full_name = @name, nickname = @nick WHERE id = @id";
+                var pName = new MySqlParameter("@name", string.IsNullOrWhiteSpace(newName) ? (object)DBNull.Value : newName);
+                var pNick = new MySqlParameter("@nick", string.IsNullOrWhiteSpace(newNick) ? (object)DBNull.Value : newNick);
+                var pId = new MySqlParameter("@id", _userId);
+
+                var rows = DBManager.Instance.ExecuteNonQuery(sql, pName, pNick, pId);
+                if (rows > 0)
+                {
+                    MessageBox.Show("프로필 정보가 저장되었습니다.", "완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    LoadProfile();
+                }
+                else
+                {
+                    MessageBox.Show("저장에 실패했습니다.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("저장 중 오류: " + ex.Message, "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void labelFullName_Click(object sender, EventArgs e)
+        {
+
         }
     }
 }

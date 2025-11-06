@@ -8,7 +8,7 @@
         private System.ComponentModel.IContainer components = null;
 
         /// <summary>
-        /// Clean up any resources being used.
+        /// Clean up any resources being being used.
         /// </summary>
         /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
         protected override void Dispose(bool disposing)
@@ -38,6 +38,14 @@
             this.linkRegister = new System.Windows.Forms.LinkLabel();
             this.comboTeam2 = new System.Windows.Forms.ComboBox();
             this.txtName = new System.Windows.Forms.TextBox();
+            this.txtNickname = new System.Windows.Forms.TextBox();
+            this.txtPostalCode = new System.Windows.Forms.TextBox();
+            this.txtAddressSearch = new System.Windows.Forms.TextBox();
+            this.btnAddressSearch = new System.Windows.Forms.Button();
+            this.txtAddressDetail = new System.Windows.Forms.TextBox();
+            this.pictureProfile = new System.Windows.Forms.PictureBox();
+            this.btnChooseImage = new System.Windows.Forms.Button();
+            ((System.ComponentModel.ISupportInitialize)(this.pictureProfile)).BeginInit();
             this.SuspendLayout();
             // 
             // label1
@@ -45,7 +53,7 @@
             this.label1.AutoSize = true;
             this.label1.Cursor = System.Windows.Forms.Cursors.Default;
             this.label1.Font = new System.Drawing.Font("Trebuchet MS", 24F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.label1.Location = new System.Drawing.Point(118, 107);
+            this.label1.Location = new System.Drawing.Point(118, 80);
             this.label1.Name = "label1";
             this.label1.Size = new System.Drawing.Size(138, 40);
             this.label1.TabIndex = 4;
@@ -57,7 +65,7 @@
             // 
             this.txtId.BackColor = System.Drawing.Color.White;
             this.txtId.Font = new System.Drawing.Font("나눔고딕", 15F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(129)));
-            this.txtId.Location = new System.Drawing.Point(75, 198);
+            this.txtId.Location = new System.Drawing.Point(75, 160);
             this.txtId.Name = "txtId";
             this.txtId.Size = new System.Drawing.Size(230, 30);
             this.txtId.TabIndex = 5;
@@ -67,7 +75,7 @@
             // 
             this.txtPwd.BackColor = System.Drawing.Color.White;
             this.txtPwd.Font = new System.Drawing.Font("나눔고딕", 15F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(129)));
-            this.txtPwd.Location = new System.Drawing.Point(75, 234);
+            this.txtPwd.Location = new System.Drawing.Point(75, 196);
             this.txtPwd.Name = "txtPwd";
             this.txtPwd.Size = new System.Drawing.Size(230, 30);
             this.txtPwd.TabIndex = 6;
@@ -78,7 +86,7 @@
             // 
             this.txtPwdCheck.BackColor = System.Drawing.Color.White;
             this.txtPwdCheck.Font = new System.Drawing.Font("나눔고딕", 15F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(129)));
-            this.txtPwdCheck.Location = new System.Drawing.Point(75, 270);
+            this.txtPwdCheck.Location = new System.Drawing.Point(75, 232);
             this.txtPwdCheck.Name = "txtPwdCheck";
             this.txtPwdCheck.Size = new System.Drawing.Size(230, 30);
             this.txtPwdCheck.TabIndex = 7;
@@ -88,7 +96,7 @@
             // 
             this.comboCompany.Font = new System.Drawing.Font("굴림", 15F);
             this.comboCompany.FormattingEnabled = true;
-            this.comboCompany.Location = new System.Drawing.Point(75, 339);
+            this.comboCompany.Location = new System.Drawing.Point(75, 418);
             this.comboCompany.Name = "comboCompany";
             this.comboCompany.Size = new System.Drawing.Size(230, 28);
             this.comboCompany.TabIndex = 8;
@@ -98,7 +106,7 @@
             // 
             this.comboTeam.Font = new System.Drawing.Font("굴림", 15F);
             this.comboTeam.FormattingEnabled = true;
-            this.comboTeam.Location = new System.Drawing.Point(75, 373);
+            this.comboTeam.Location = new System.Drawing.Point(75, 452);
             this.comboTeam.Name = "comboTeam";
             this.comboTeam.Size = new System.Drawing.Size(230, 28);
             this.comboTeam.TabIndex = 9;
@@ -106,20 +114,19 @@
             // 
             // btnRegister
             // 
-            this.btnRegister.Location = new System.Drawing.Point(75, 440);
+            this.btnRegister.Location = new System.Drawing.Point(75, 520);
             this.btnRegister.Name = "btnRegister";
             this.btnRegister.Size = new System.Drawing.Size(230, 35);
             this.btnRegister.TabIndex = 10;
             this.btnRegister.Text = "회원가입";
             this.btnRegister.UseVisualStyleBackColor = true;
-            // 이벤트 연결: 기존 버튼 클릭 핸들러 재사용
             this.btnRegister.Click += new System.EventHandler(this.button1_Click);
             // 
             // linkRegister
             // 
             this.linkRegister.AutoSize = true;
             this.linkRegister.LinkColor = System.Drawing.Color.FromArgb(((int)(((byte)(64)))), ((int)(((byte)(64)))), ((int)(((byte)(64)))));
-            this.linkRegister.Location = new System.Drawing.Point(168, 494);
+            this.linkRegister.Location = new System.Drawing.Point(168, 564);
             this.linkRegister.Name = "linkRegister";
             this.linkRegister.Size = new System.Drawing.Size(41, 12);
             this.linkRegister.TabIndex = 11;
@@ -132,7 +139,7 @@
             // 
             this.comboTeam2.Font = new System.Drawing.Font("굴림", 15F);
             this.comboTeam2.FormattingEnabled = true;
-            this.comboTeam2.Location = new System.Drawing.Point(75, 406);
+            this.comboTeam2.Location = new System.Drawing.Point(75, 486);
             this.comboTeam2.Name = "comboTeam2";
             this.comboTeam2.Size = new System.Drawing.Size(230, 28);
             this.comboTeam2.TabIndex = 12;
@@ -143,19 +150,96 @@
             // 
             this.txtName.BackColor = System.Drawing.Color.White;
             this.txtName.Font = new System.Drawing.Font("나눔고딕", 15F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(129)));
-            this.txtName.Location = new System.Drawing.Point(75, 162);
+            this.txtName.Location = new System.Drawing.Point(75, 124);
             this.txtName.Name = "txtName";
-            this.txtName.Size = new System.Drawing.Size(230, 30);
+            this.txtName.Size = new System.Drawing.Size(134, 30);
             this.txtName.TabIndex = 13;
             this.txtName.Text = "이름";
             this.txtName.TextChanged += new System.EventHandler(this.textBox1_TextChanged);
+            // 
+            // txtNickname
+            // 
+            this.txtNickname.BackColor = System.Drawing.Color.White;
+            this.txtNickname.Font = new System.Drawing.Font("나눔고딕", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(129)));
+            this.txtNickname.Location = new System.Drawing.Point(215, 127);
+            this.txtNickname.Name = "txtNickname";
+            this.txtNickname.Size = new System.Drawing.Size(108, 26);
+            this.txtNickname.TabIndex = 14;
+            this.txtNickname.Text = "별명 (선택)";
+            // 
+            // txtPostalCode
+            // 
+            this.txtPostalCode.BackColor = System.Drawing.Color.White;
+            this.txtPostalCode.Font = new System.Drawing.Font("나눔고딕", 12F);
+            this.txtPostalCode.Location = new System.Drawing.Point(75, 350);
+            this.txtPostalCode.Name = "txtPostalCode";
+            this.txtPostalCode.Size = new System.Drawing.Size(100, 26);
+            this.txtPostalCode.TabIndex = 15;
+            this.txtPostalCode.Text = "우편번호";
+            // 
+            // txtAddressSearch
+            // 
+            this.txtAddressSearch.BackColor = System.Drawing.Color.White;
+            this.txtAddressSearch.Font = new System.Drawing.Font("나눔고딕", 12F);
+            this.txtAddressSearch.Location = new System.Drawing.Point(180, 350);
+            this.txtAddressSearch.Name = "txtAddressSearch";
+            this.txtAddressSearch.Size = new System.Drawing.Size(125, 26);
+            this.txtAddressSearch.TabIndex = 16;
+            this.txtAddressSearch.Text = "주소 검색";
+            // 
+            // btnAddressSearch
+            // 
+            this.btnAddressSearch.Location = new System.Drawing.Point(310, 350);
+            this.btnAddressSearch.Name = "btnAddressSearch";
+            this.btnAddressSearch.Size = new System.Drawing.Size(60, 26);
+            this.btnAddressSearch.TabIndex = 17;
+            this.btnAddressSearch.Text = "검색";
+            this.btnAddressSearch.UseVisualStyleBackColor = true;
+            this.btnAddressSearch.Click += new System.EventHandler(this.btnAddressSearch_Click);
+            // 
+            // txtAddressDetail
+            // 
+            this.txtAddressDetail.BackColor = System.Drawing.Color.White;
+            this.txtAddressDetail.Font = new System.Drawing.Font("나눔고딕", 12F);
+            this.txtAddressDetail.Location = new System.Drawing.Point(75, 384);
+            this.txtAddressDetail.Name = "txtAddressDetail";
+            this.txtAddressDetail.Size = new System.Drawing.Size(230, 26);
+            this.txtAddressDetail.TabIndex = 18;
+            this.txtAddressDetail.Text = "상세 주소";
+            // 
+            // pictureProfile
+            // 
+            this.pictureProfile.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            this.pictureProfile.Location = new System.Drawing.Point(75, 268);
+            this.pictureProfile.Name = "pictureProfile";
+            this.pictureProfile.Size = new System.Drawing.Size(134, 76);
+            this.pictureProfile.SizeMode = System.Windows.Forms.PictureBoxSizeMode.Zoom;
+            this.pictureProfile.TabIndex = 19;
+            this.pictureProfile.TabStop = false;
+            // 
+            // btnChooseImage
+            // 
+            this.btnChooseImage.Location = new System.Drawing.Point(245, 292);
+            this.btnChooseImage.Name = "btnChooseImage";
+            this.btnChooseImage.Size = new System.Drawing.Size(60, 26);
+            this.btnChooseImage.TabIndex = 20;
+            this.btnChooseImage.Text = "사진";
+            this.btnChooseImage.UseVisualStyleBackColor = true;
+            this.btnChooseImage.Click += new System.EventHandler(this.btnChooseImage_Click);
             // 
             // Registerform
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 12F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.Gold;
-            this.ClientSize = new System.Drawing.Size(379, 616);
+            this.ClientSize = new System.Drawing.Size(400, 620);
+            this.Controls.Add(this.btnChooseImage);
+            this.Controls.Add(this.pictureProfile);
+            this.Controls.Add(this.txtAddressDetail);
+            this.Controls.Add(this.btnAddressSearch);
+            this.Controls.Add(this.txtAddressSearch);
+            this.Controls.Add(this.txtPostalCode);
+            this.Controls.Add(this.txtNickname);
             this.Controls.Add(this.txtName);
             this.Controls.Add(this.comboTeam2);
             this.Controls.Add(this.linkRegister);
@@ -169,6 +253,7 @@
             this.Name = "Registerform";
             this.Text = "Registerform";
             this.Load += new System.EventHandler(this.formRegister_Load);
+            ((System.ComponentModel.ISupportInitialize)(this.pictureProfile)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -186,5 +271,12 @@
         private System.Windows.Forms.LinkLabel linkRegister;
         private System.Windows.Forms.ComboBox comboTeam2;
         private System.Windows.Forms.TextBox txtName;
+        private System.Windows.Forms.TextBox txtNickname;
+        private System.Windows.Forms.TextBox txtPostalCode;
+        private System.Windows.Forms.TextBox txtAddressSearch;
+        private System.Windows.Forms.Button btnAddressSearch;
+        private System.Windows.Forms.TextBox txtAddressDetail;
+        private System.Windows.Forms.PictureBox pictureProfile;
+        private System.Windows.Forms.Button btnChooseImage;
     }
 }

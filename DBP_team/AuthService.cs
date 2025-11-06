@@ -15,7 +15,7 @@ namespace DBP_team
         /// 회원가입: companyId/departmentId/teamId는 0이면 NULL로 저장됩니다.
         /// 반환값: 성공 여부. 실패 시 error에 메시지 반환.
         /// </summary>
-        public bool Register(string email, string password, string fullName, int companyId, int departmentId, int teamId, out string error)
+        public bool Register(string email, string password, string fullName, string nickname, int companyId, int departmentId, int teamId, out string error)
         {
             error = null;
 
@@ -40,12 +40,23 @@ namespace DBP_team
 
                 var hash = HashPassword(password);
 
-                var sql = @"INSERT INTO users (company_id, department_id, team_id, email, password_hash, full_name)
-                            VALUES (@companyId, @departmentId, @teamId, @email, @hash, @fullName)";
+                // DB 구조에 nickname 컬럼이 없을 수도 있으므로 시도해서 추가합니다. 실패해도 진행합니다.
+                try
+                {
+                    DBManager.Instance.ExecuteNonQuery("ALTER TABLE users ADD COLUMN nickname VARCHAR(100) NULL");
+                }
+                catch
+                {
+                    // 무시: ALTER 실패는 크게 문제가 되지 않음 (이미 존재하거나 권한 부족 등)
+                }
+
+                var sql = @"INSERT INTO users (company_id, department_id, team_id, email, password_hash, full_name, nickname)
+                            VALUES (@companyId, @departmentId, @teamId, @email, @hash, @fullName, @nickname)";
 
                 var pCompany = new MySqlParameter("@companyId", companyId > 0 ? (object)companyId : DBNull.Value);
                 var pDept = new MySqlParameter("@departmentId", departmentId > 0 ? (object)departmentId : DBNull.Value);
                 var pTeam = new MySqlParameter("@teamId", teamId > 0 ? (object)teamId : DBNull.Value);
+                var pNick = new MySqlParameter("@nickname", string.IsNullOrWhiteSpace(nickname) ? (object)DBNull.Value : nickname);
 
                 var affected = DBManager.Instance.ExecuteNonQuery(sql,
                     pCompany,
@@ -53,7 +64,8 @@ namespace DBP_team
                     pTeam,
                     new MySqlParameter("@email", email),
                     new MySqlParameter("@hash", hash),
-                    new MySqlParameter("@fullName", fullName));
+                    new MySqlParameter("@fullName", fullName),
+                    pNick);
 
                 if (affected <= 0)
                 {

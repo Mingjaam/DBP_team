@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Data;
 using System.Drawing;
+using System.IO;
+using System.Net.Http;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using MySql.Data.MySqlClient;
 
@@ -9,6 +12,7 @@ namespace DBP_team
     public partial class Registerform : Form
     {
         private readonly AuthService _auth = new AuthService();
+        private byte[] _profileImageBytes;
 
         public Registerform()
         {
@@ -60,12 +64,82 @@ namespace DBP_team
             this.Close();
         }
 
+        private void btnChooseImage_Click(object sender, EventArgs e)
+        {
+            using (var ofd = new OpenFileDialog())
+            {
+                ofd.Filter = "이미지 파일|*.png;*.jpg;*.jpeg;*.bmp;*.gif|모든 파일|*.*";
+                if (ofd.ShowDialog() != DialogResult.OK) return;
+
+                try
+                {
+                    using (var fs = new FileStream(ofd.FileName, FileMode.Open, FileAccess.Read))
+                    using (var img = Image.FromStream(fs))
+                    {
+                        // copy image and set picture box
+                        var bmp = new Bitmap(img);
+                        pictureProfile.Image?.Dispose();
+                        pictureProfile.Image = bmp;
+
+                        using (var ms = new MemoryStream())
+                        {
+                            bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+                            _profileImageBytes = ms.ToArray();
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("이미지 로드 실패: " + ex.Message, "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+        private async void btnAddressSearch_Click(object sender, EventArgs e)
+        {
+            var query = txtAddressSearch.Text?.Trim();
+            if (string.IsNullOrWhiteSpace(query))
+            {
+                MessageBox.Show("검색어를 입력하세요.", "입력 오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // 호출: RESTful 주소 검색 API (예: 우편번호/주소 자동완성). 실제 API 키/URL 필요.
+            try
+            {
+                var result = await SearchAddressAsync(query);
+                if (!string.IsNullOrEmpty(result.postalCode)) txtPostalCode.Text = result.postalCode;
+                if (!string.IsNullOrEmpty(result.address)) txtAddressDetail.Text = result.address;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("주소 검색 오류: " + ex.Message, "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        // 간단한 REST 주소 검색 예시(실제 API URL/키로 교체 필요)
+        private async Task<(string postalCode, string address)> SearchAddressAsync(string query)
+        {
+            using (var http = new HttpClient())
+            {
+                // TODO: 실제 주소 검색 API 엔드포인트 및 파라미터 사용
+                var apiUrl = "https://api.example.com/address/search?q=" + Uri.EscapeDataString(query);
+                var resp = await http.GetAsync(apiUrl);
+                resp.EnsureSuccessStatusCode();
+
+                var json = await resp.Content.ReadAsStringAsync();
+                // TODO: parse JSON according to API response. For now, return placeholders
+                return (postalCode: "00000", address: "(샘플 주소) " + query);
+            }
+        }
+
         private void button1_Click(object sender, EventArgs e)
         {
             var email = txtId.Text?.Trim();
             var pwd = txtPwd.Text;
             var pwdCheck = txtPwdCheck.Text;
             var name = txtName.Text?.Trim();
+            var nickname = txtNickname.Text?.Trim();
 
             // 기본 유효성 검사
             if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(pwd) || string.IsNullOrWhiteSpace(pwdCheck) || string.IsNullOrWhiteSpace(name))
@@ -98,11 +172,26 @@ namespace DBP_team
             }
 
             string err;
-            var ok = _auth.Register(email, pwd, name, companyId, departmentId, teamId, out err);
+            var ok = _auth.Register(email, pwd, name, nickname, companyId, departmentId, teamId, out err);
             if (!ok)
             {
                 MessageBox.Show(err ?? "회원가입 실패", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
+            }
+
+            // profile image 업로드: users 테이블에 profile_image 컬럼이 있다고 가정
+            if (_profileImageBytes != null && _profileImageBytes.Length > 0)
+            {
+                try
+                {
+                    DBManager.Instance.ExecuteNonQuery("UPDATE users SET profile_image = @img WHERE email = @email",
+                        new MySqlParameter("@img", MySqlDbType.Blob) { Value = _profileImageBytes },
+                        new MySqlParameter("@email", email));
+                }
+                catch
+                {
+                    // 실패해도 회원가입 자체는 성공으로 둠
+                }
             }
 
             MessageBox.Show("회원가입이 완료되었습니다. 로그인 화면으로 이동합니다.", "완료", MessageBoxButtons.OK, MessageBoxIcon.Information);

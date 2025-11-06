@@ -127,6 +127,9 @@ namespace DBP_team
                     CompanyName = row["company_name"] == DBNull.Value ? null : row["company_name"].ToString()
                 };
 
+                // set session
+                AppSession.CurrentUser = user;
+
                 // MainForm으로 전달
                 var main = new MainForm(user);
 

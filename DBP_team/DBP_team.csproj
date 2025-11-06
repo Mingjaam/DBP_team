@@ -95,6 +95,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AppSession.cs" />
     <Compile Include="AuthService.cs" />
     <Compile Include="ChatForm.cs">
       <SubType>Form</SubType>
