@@ -40,6 +40,16 @@
             this.btnProfile = new System.Windows.Forms.Button();
             this.SuspendLayout();
             // 
+            // btnOpenLogin
+            // 
+            this.btnOpenLogin.Location = new System.Drawing.Point(216, 18);
+            this.btnOpenLogin.Name = "btnOpenLogin";
+            this.btnOpenLogin.Size = new System.Drawing.Size(70, 34);
+            this.btnOpenLogin.TabIndex = 5;
+            this.btnOpenLogin.Text = "로그인";
+            this.btnOpenLogin.UseVisualStyleBackColor = true;
+            this.btnOpenLogin.Click += new System.EventHandler(this.btnOpenLogin_Click);
+            // 
             // treeViewUser
             // 
             this.treeViewUser.Location = new System.Drawing.Point(34, 301);
@@ -61,6 +71,7 @@
             this.listViewRecent.TabIndex = 3;
             this.listViewRecent.UseCompatibleStateImageBehavior = false;
             this.listViewRecent.View = System.Windows.Forms.View.Details;
+            this.listViewRecent.SelectedIndexChanged += new System.EventHandler(this.listViewRecent_SelectedIndexChanged);
             this.listViewRecent.DoubleClick += new System.EventHandler(this.listViewRecent_DoubleClick);
             // 
             // colName
@@ -114,16 +125,6 @@
             this.btnProfile.Text = "프로필";
             this.btnProfile.UseVisualStyleBackColor = true;
             this.btnProfile.Click += new System.EventHandler(this.button1_Click);
-            // 
-            // btnOpenLogin
-            // 
-            this.btnOpenLogin.Location = new System.Drawing.Point(216, 18);
-            this.btnOpenLogin.Name = "btnOpenLogin";
-            this.btnOpenLogin.Size = new System.Drawing.Size(70, 34);
-            this.btnOpenLogin.TabIndex = 5;
-            this.btnOpenLogin.Text = "로그인";
-            this.btnOpenLogin.UseVisualStyleBackColor = true;
-            this.btnOpenLogin.Click += new System.EventHandler(this.btnOpenLogin_Click);
             // 
             // MainForm
             // 

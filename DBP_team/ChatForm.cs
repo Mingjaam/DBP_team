@@ -26,6 +26,9 @@ namespace DBP_team
         private CancellationTokenSource _cts;
         private Thread _recvThread;
 
+        private const string ChatServerHost = "192.168.55.207"; // internal IP
+        private const int ChatServerPort = 9000;
+
         public ChatForm(int myUserId, int otherUserId, string otherName)
         {
             InitializeComponent();
@@ -81,7 +84,7 @@ namespace DBP_team
             try
             {
                 _tcp = new TcpClient();
-                _tcp.Connect("127.0.0.1", 9000);
+                _tcp.Connect(ChatServerHost, ChatServerPort);
                 var ns = _tcp.GetStream();
                 _reader = new StreamReader(ns, Encoding.UTF8);
                 _writer = new StreamWriter(ns, Encoding.UTF8) { AutoFlush = true };
@@ -98,7 +101,7 @@ namespace DBP_team
             }
             catch (Exception ex)
             {
-                MessageBox.Show("채팅 서버 연결 실패: " + ex.Message, "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("채팅 서버 연결 실패: " + ex.Message + " (" + ChatServerHost + ")", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 

@@ -505,5 +505,10 @@ namespace DBP_team
                 MessageBox.Show("로그인 창을 열 수 없습니다: " + ex.Message, "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
+
+        private void listViewRecent_SelectedIndexChanged(object sender, EventArgs e)
+        {
+
+        }
     }
 }
