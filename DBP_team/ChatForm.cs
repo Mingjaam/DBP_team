@@ -26,8 +26,11 @@ namespace DBP_team
         private CancellationTokenSource _cts;
         private Thread _recvThread;
 
-        private const string ChatServerHost = "192.168.55.207"; // internal IP
+        // Prefer internal host; fallback to external for users outside the LAN
+        private const string InternalHost = "192.168.55.207";
+        private const string ExternalHost = "39.112.89.182";
         private const int ChatServerPort = 9000;
+        private static string _resolvedHost; // cached for process lifetime
 
         public ChatForm(int myUserId, int otherUserId, string otherName)
         {
@@ -83,8 +86,12 @@ namespace DBP_team
         {
             try
             {
+                var host = ResolveHost();
+
                 _tcp = new TcpClient();
-                _tcp.Connect(ChatServerHost, ChatServerPort);
+                // If host was not resolvable via quick probe (edge case), fallback to external
+                if (string.IsNullOrEmpty(host)) host = ExternalHost;
+                _tcp.Connect(host, ChatServerPort);
                 var ns = _tcp.GetStream();
                 _reader = new StreamReader(ns, Encoding.UTF8);
                 _writer = new StreamWriter(ns, Encoding.UTF8) { AutoFlush = true };
@@ -101,8 +108,41 @@ namespace DBP_team
             }
             catch (Exception ex)
             {
-                MessageBox.Show("채팅 서버 연결 실패: " + ex.Message + " (" + ChatServerHost + ")", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                var hostInfo = string.IsNullOrEmpty(_resolvedHost) ? "(host 미결정)" : _resolvedHost;
+                MessageBox.Show("채팅 서버 연결 실패: " + ex.Message + " [" + hostInfo + "]", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        // Decide once per process: try internal first with short timeout, else external
+        private static string ResolveHost()
+        {
+            if (!string.IsNullOrEmpty(_resolvedHost)) return _resolvedHost;
+            if (CanConnectQuick(InternalHost, ChatServerPort, 700))
+            {
+                _resolvedHost = InternalHost;
+            }
+            else
+            {
+                _resolvedHost = ExternalHost;
+            }
+            return _resolvedHost;
+        }
+
+        private static bool CanConnectQuick(string host, int port, int timeoutMs)
+        {
+            try
+            {
+                using (var client = new TcpClient())
+                {
+                    var ar = client.BeginConnect(host, port, null, null);
+                    bool ok = ar.AsyncWaitHandle.WaitOne(timeoutMs);
+                    if (!ok) { try { client.Close(); } catch { } return false; }
+                    client.EndConnect(ar);
+                    try { client.Close(); } catch { }
+                    return true;
+                }
+            }
+            catch { return false; }
         }
 
         private void RecvLoop()
@@ -201,6 +241,11 @@ namespace DBP_team
                     var message = r["message"]?.ToString() ?? "";
 
                     var bubble = CreateBubble(message, time, whoMine, id);
+                    if (whoMine)
+                    {
+                        bool isRead = r["is_read"] != DBNull.Value && Convert.ToInt32(r["is_read"]) == 1;
+                        bubble.SetRead(isRead);
+                    }
                     _flow.Controls.Add(bubble);
                 }
 
