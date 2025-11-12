@@ -82,6 +82,7 @@
             this.Controls.Add(this.listChat);
             this.Name = "ChatForm";
             this.Text = "ChatForm";
+            this.FormClosed += new System.Windows.Forms.FormClosedEventHandler(this.ChatForm_FormClosed);
             this.Load += new System.EventHandler(this.ChatForm_Load);
             this.ResumeLayout(false);
             this.PerformLayout();

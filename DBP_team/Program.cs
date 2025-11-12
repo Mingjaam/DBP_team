@@ -14,9 +14,15 @@ namespace DBP_team
         [STAThread]
         static void Main()
         {
+            // Start internal chat server (non-blocking)
+            ChatServer.Start(9000);
+
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Application.Run(new Loginform());
+
+            // On exit stop server
+            ChatServer.Stop();
         }
     }
 }

@@ -5,6 +5,10 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using MySql.Data.MySqlClient;
 using DBP_team.Controls;
+using System.Net.Sockets;
+using System.IO;
+using System.Text;
+using System.Threading;
 
 namespace DBP_team
 {
@@ -15,9 +19,12 @@ namespace DBP_team
         private readonly string _otherName;
         private FlowLayoutPanel _flow;
 
-        // fields
-        private System.Windows.Forms.Timer _chatPollTimer;
-        private int _lastChatId;
+        // TCP client
+        private TcpClient _tcp;
+        private StreamReader _reader;
+        private StreamWriter _writer;
+        private CancellationTokenSource _cts;
+        private Thread _recvThread;
 
         public ChatForm(int myUserId, int otherUserId, string otherName)
         {
@@ -49,12 +56,10 @@ namespace DBP_team
 
             _flow.Resize += (s, e) =>
             {
-                // 폭 변경 시 각 bubble 재계산
                 foreach (Control c in _flow.Controls)
                 {
                     if (c is ChatBubbleControl bubble)
                     {
-                        // Tag에 저장된 데이터로 재설정
                         var t = bubble.Tag as Tuple<string, DateTime, bool, int>;
                         if (t != null)
                         {
@@ -68,67 +73,67 @@ namespace DBP_team
             btnSend.Text = "전송";
 
             LoadMessages();
-
-            // Start polling after initial load so _lastChatId is set from existing messages
-            StartChatPolling();
+            ConnectToChatServer();
         }
 
-        // 호출: 생성자 또는 Load 이후
-        private void StartChatPolling()
-        {
-            // ensure last id initialized
-            if (_lastChatId <= 0) _lastChatId = 0;
-
-            if (_chatPollTimer == null)
-            {
-                _chatPollTimer = new System.Windows.Forms.Timer { Interval = 3000 };
-                _chatPollTimer.Tick += ChatPollTimer_Tick;
-            }
-
-            _chatPollTimer.Start();
-        }
-
-        // Run DB query on background thread to avoid blocking UI
-        private async void ChatPollTimer_Tick(object sender, EventArgs e)
+        private void ConnectToChatServer()
         {
             try
             {
-                if (_myUserId <= 0) return;
+                _tcp = new TcpClient();
+                _tcp.Connect("127.0.0.1", 9000);
+                var ns = _tcp.GetStream();
+                _reader = new StreamReader(ns, Encoding.UTF8);
+                _writer = new StreamWriter(ns, Encoding.UTF8) { AutoFlush = true };
+                _cts = new CancellationTokenSource();
 
-                var lastId = _lastChatId;
-                var me = _myUserId;
-                var other = _otherUserId;
+                // AUTH
+                _writer.WriteLine("AUTH|" + _myUserId);
+                var resp = _reader.ReadLine();
+                // Optionally check resp == AUTH_OK
 
-                var dt = await Task.Run(() => DBManager.Instance.ExecuteDataTable(
-                    "SELECT id, sender_id, message, created_at FROM chat " +
-                    "WHERE ((sender_id=@other AND receiver_id=@me) OR (sender_id=@me AND receiver_id=@other)) " +
-                    "AND id > @lastId ORDER BY id ASC",
-                    new MySqlParameter("@me", me),
-                    new MySqlParameter("@other", other),
-                    new MySqlParameter("@lastId", lastId)));
+                _recvThread = new Thread(RecvLoop) { IsBackground = true };
+                _recvThread.Start();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("채팅 서버 연결 실패: " + ex.Message, "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
 
-                if (dt != null && dt.Rows.Count > 0)
+        private void RecvLoop()
+        {
+            try
+            {
+                while (_tcp != null && _tcp.Connected && !_cts.IsCancellationRequested)
                 {
-                    int newestId = lastId;
-                    foreach (DataRow r in dt.Rows)
+                    var line = _reader.ReadLine();
+                    if (line == null) break;
+                    var parts = line.Split('|');
+                    if (parts.Length >= 4 && parts[0] == "MSG")
                     {
-                        var msg = r["message"]?.ToString() ?? "";
-                        var senderId = Convert.ToInt32(r["sender_id"]);
-                        var created = r["created_at"] != DBNull.Value ? Convert.ToDateTime(r["created_at"]) : DateTime.Now;
-                        var id = Convert.ToInt32(r["id"]);
-                        if (id > newestId) newestId = id;
-
-                        // UI 업데이트은 BeginInvoke로 안전하게
-                        this.BeginInvoke((Action)(() => AddBubbleImmediate(msg, created, senderId == _myUserId, id)));
+                        int from = 0, to = 0;
+                        int.TryParse(parts[1], out from);
+                        int.TryParse(parts[2], out to);
+                        var msg = DecodeBase64(parts[3]);
+                        if (from == _otherUserId && to == _myUserId)
+                        {
+                            var time = DateTime.Now;
+                            this.BeginInvoke((Action)(() => AddBubbleImmediate(msg, time, false, 0)));
+                        }
                     }
-
-                    _lastChatId = newestId;
                 }
             }
             catch
             {
-                // 폴링 중 오류 무시
+                // ignore
             }
+        }
+
+        private static string EncodeBase64(string s) => Convert.ToBase64String(Encoding.UTF8.GetBytes(s ?? ""));
+        private static string DecodeBase64(string b)
+        {
+            try { return Encoding.UTF8.GetString(Convert.FromBase64String(b)); } catch { return ""; }
         }
 
         private void LoadMessages()
@@ -149,60 +154,45 @@ namespace DBP_team
                 {
                     var lbl = new Label { Text = "대화가 없습니다.", AutoSize = true, ForeColor = Color.Gray, Margin = new Padding(10) };
                     _flow.Controls.Add(lbl);
-                    // set last id to 0 so polling will pick up any future messages
-                    _lastChatId = 0;
                     return;
                 }
 
-                int newestId = 0;
-                 foreach (DataRow r in dt.Rows)
-                 {
-                     var id = Convert.ToInt32(r["id"]);
-                     var time = r["created_at"] == DBNull.Value ? DateTime.Now : Convert.ToDateTime(r["created_at"]);
-                     var senderId = Convert.ToInt32(r["sender_id"]);
-                     var whoMine = senderId == _myUserId;
-                     var message = r["message"]?.ToString() ?? "";
+                foreach (DataRow r in dt.Rows)
+                {
+                    var id = Convert.ToInt32(r["id"]);
+                    var time = r["created_at"] == DBNull.Value ? DateTime.Now : Convert.ToDateTime(r["created_at"]);
+                    var senderId = Convert.ToInt32(r["sender_id"]);
+                    var whoMine = senderId == _myUserId;
+                    var message = r["message"]?.ToString() ?? "";
 
-                     var bubble = CreateBubble(message, time, whoMine, id);
-                     _flow.Controls.Add(bubble);
+                    var bubble = CreateBubble(message, time, whoMine, id);
+                    _flow.Controls.Add(bubble);
+                }
 
-                     if (id > newestId) newestId = id;
-                 }
-
-                 if (_flow.Controls.Count > 0)
-                     _flow.ScrollControlIntoView(_flow.Controls[_flow.Controls.Count - 1]);
-
-                // set last id to newest message id to avoid re-fetching
-                _lastChatId = newestId;
-             }
-             catch (Exception ex)
-             {
-                 MessageBox.Show("채팅 불러오는 중 오류: " + ex.Message, "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
-             }
-         }
+                if (_flow.Controls.Count > 0)
+                    _flow.ScrollControlIntoView(_flow.Controls[_flow.Controls.Count - 1]);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("채팅 불러오는 중 오류: " + ex.Message, "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
 
         private ChatBubbleControl CreateBubble(string message, DateTime time, bool isMine, int id)
         {
             var bubble = new ChatBubbleControl();
             bubble.Width = Math.Max(200, _flow.ClientSize.Width);
-            // tag에 데이터를 저장해 resize 시 재설정에 사용
             bubble.Tag = Tuple.Create(message, time, isMine, id);
             bubble.SetData(message, time, isMine, _flow.ClientSize.Width);
             bubble.Margin = new Padding(0, 6, 0, 6);
             return bubble;
         }
 
-        // 즉시 하단에 새 말풍선 추가 (전송 후 호출)
         private void AddBubbleImmediate(string message, DateTime time, bool isMine, int id)
         {
             var bubble = CreateBubble(message, time, isMine, id);
             _flow.Controls.Add(bubble);
             _flow.ScrollControlIntoView(bubble);
-        }
-
-        private void listView1_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            // 필요 시 구현
         }
 
         private void button1_Click(object sender, EventArgs e)
@@ -216,39 +206,14 @@ namespace DBP_team
 
             try
             {
-                var sql = "INSERT INTO chat (sender_id, receiver_id, message) VALUES (@s, @r, @msg)";
-                DBManager.Instance.ExecuteNonQuery(sql,
-                    new MySqlParameter("@s", _myUserId),
-                    new MySqlParameter("@r", _otherUserId),
-                    new MySqlParameter("@msg", text));
+                // send via TCP to server
+                var line = "MSG|" + _myUserId + "|" + _otherUserId + "|" + EncodeBase64(text);
+                _writer?.WriteLine(line);
 
-                // get last inserted id to avoid duplicate display when polling
-                try
-                {
-                    var lastObj = DBManager.Instance.ExecuteScalar("SELECT LAST_INSERT_ID()");
-                    int lastId = 0;
-                    if (lastObj != null && lastObj != DBNull.Value)
-                    {
-                        int.TryParse(lastObj.ToString(), out lastId);
-                    }
-
-                    var sentTime = DateTime.Now;
-                    txtChat.Clear();
-                    txtChat.Focus();
-
-                    // Immediately show message with the real id and update _lastChatId to avoid polling duplicates
-                    AddBubbleImmediate(text, sentTime, true, lastId);
-
-                    if (lastId > _lastChatId) _lastChatId = lastId;
-                }
-                catch
-                {
-                    // fallback: if we cannot obtain last id, add bubble with id 0 as before
-                    var sentTime = DateTime.Now;
-                    txtChat.Clear();
-                    txtChat.Focus();
-                    AddBubbleImmediate(text, sentTime, true, 0);
-                }
+                var sentTime = DateTime.Now;
+                txtChat.Clear();
+                txtChat.Focus();
+                AddBubbleImmediate(text, sentTime, true, 0);
             }
             catch (Exception ex)
             {
@@ -256,14 +221,26 @@ namespace DBP_team
             }
         }
 
+        private void ChatForm_FormClosed(object sender, FormClosedEventArgs e)
+        {
+            try { _cts?.Cancel(); } catch { }
+            try { _writer?.WriteLine("QUIT|"); } catch { }
+            try { _tcp?.Close(); } catch { }
+        }
+
+        private void listView1_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            // 현재 사용 안 함
+        }
+
         private void txtChat_TextChanged(object sender, EventArgs e)
         {
-
+            // 필요 시 입력 검증 등 추가
         }
 
         private void ChatForm_Load(object sender, EventArgs e)
         {
-
+            // 폼 로드시 추가 초기화가 필요하면 작성
         }
     }
 }

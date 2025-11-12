@@ -106,6 +106,7 @@
     <Compile Include="ChatForm.Designer.cs">
       <DependentUpon>ChatForm.cs</DependentUpon>
     </Compile>
+    <Compile Include="ChatServer.cs" />
     <Compile Include="Controls\ChatBubbleControl.cs">
       <SubType>UserControl</SubType>
     </Compile>
