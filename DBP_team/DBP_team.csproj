@@ -98,6 +98,10 @@
     <Compile Include="AddressSearchForm.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="AdminForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="AdminGuard.cs" />
     <Compile Include="AppSession.cs" />
     <Compile Include="AuthService.cs" />
     <Compile Include="ChatForm.cs">

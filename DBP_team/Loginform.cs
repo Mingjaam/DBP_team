@@ -127,19 +127,22 @@ namespace DBP_team
                     CompanyName = row["company_name"] == DBNull.Value ? null : row["company_name"].ToString()
                 };
 
-                // set session
                 AppSession.CurrentUser = user;
 
-                // MainForm으로 전달
-                var main = new MainForm(user);
+                Form next;
+                if (AdminGuard.IsAdmin(user))
+                {
+                    next = new AdminForm(user);
+                }
+                else
+                {
+                    next = new MainForm(user);
+                }
 
-                // Do not force MainForm size to match Loginform; let MainForm use its designer size or set explicitly
-                main.StartPosition = FormStartPosition.CenterScreen;
-
-                main.FormClosed += (s, args) => this.Close();
-
+                next.StartPosition = FormStartPosition.CenterScreen;
+                next.FormClosed += (s, args) => this.Close();
                 this.Hide();
-                main.Show();
+                next.Show();
             }
             catch (Exception ex)
             {
