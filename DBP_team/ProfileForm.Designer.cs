@@ -44,6 +44,7 @@
             this.txtAddressMain = new System.Windows.Forms.TextBox();
             this.txtAddressDetail = new System.Windows.Forms.TextBox();
             this.btnAddressSearch = new System.Windows.Forms.Button();
+            this.btnMultiProfiles = new System.Windows.Forms.Button();
             ((System.ComponentModel.ISupportInitialize)(this.pictureProfile)).BeginInit();
             this.SuspendLayout();
             // 
@@ -206,11 +207,22 @@
             this.btnAddressSearch.UseVisualStyleBackColor = true;
             this.btnAddressSearch.Click += new System.EventHandler(this.btnAddressSearch_Click);
             // 
+            // btnMultiProfiles
+            // 
+            this.btnMultiProfiles.Location = new System.Drawing.Point(14, 270);
+            this.btnMultiProfiles.Name = "btnMultiProfiles";
+            this.btnMultiProfiles.Size = new System.Drawing.Size(150, 24);
+            this.btnMultiProfiles.TabIndex = 19;
+            this.btnMultiProfiles.Text = "멀티프로필 관리";
+            this.btnMultiProfiles.UseVisualStyleBackColor = true;
+            this.btnMultiProfiles.Click += new System.EventHandler(this.btnMultiProfiles_Click);
+            // 
             // ProfileForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 12F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(493, 349);
+            this.Controls.Add(this.btnMultiProfiles);
             this.Controls.Add(this.btnAddressSearch);
             this.Controls.Add(this.txtAddressDetail);
             this.Controls.Add(this.txtAddressMain);
@@ -259,5 +271,6 @@
         private System.Windows.Forms.TextBox txtAddressMain;
         private System.Windows.Forms.TextBox txtAddressDetail;
         private System.Windows.Forms.Button btnAddressSearch;
+        private System.Windows.Forms.Button btnMultiProfiles;
     }
 }

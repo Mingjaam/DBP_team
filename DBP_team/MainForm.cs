@@ -81,8 +81,10 @@ namespace DBP_team
 
             _initializedFromCtor = true;
 
+            // 로그인 사용자의 표기명도 멀티프로필에 맞춰서 표시
+            var display = MultiProfileService.GetDisplayNameForViewer(_userId, _userId);
             labelCompany.Text = string.IsNullOrWhiteSpace(_companyName) ? $"회사 ID:{_companyId}" : _companyName;
-            labelName.Text = string.IsNullOrWhiteSpace(_userName) ? "사용자: (알 수 없음)" : $"사용자: {_userName}";
+            labelName.Text = string.IsNullOrWhiteSpace(display) ? (string.IsNullOrWhiteSpace(_userName) ? "사용자: (알 수 없음)" : $"사용자: {_userName}") : $"사용자: {display}";
 
             LoadCompanyTree();
             LoadRecentChats();
@@ -114,8 +116,10 @@ namespace DBP_team
                     }
                 }
 
+                // 로그인 사용자의 표기명도 멀티프로필에 맞춰서 표시
+                var display = MultiProfileService.GetDisplayNameForViewer(_userId, _userId);
                 labelCompany.Text = string.IsNullOrWhiteSpace(_companyName) ? $"회사 ID:{_companyId}" : _companyName;
-                labelName.Text = string.IsNullOrWhiteSpace(_userName) ? "사용자: (알 수 없음)" : $"사용자: {_userName}";
+                labelName.Text = string.IsNullOrWhiteSpace(display) ? (string.IsNullOrWhiteSpace(_userName) ? "사용자: (알 수 없음)" : $"사용자: {_userName}") : $"사용자: {display}";
                 LoadCompanyTree();
                 LoadRecentChats();
 
@@ -149,7 +153,10 @@ namespace DBP_team
                 var parts = tag.Split(':');
                 if (parts.Length == 2 && int.TryParse(parts[1], out int otherId))
                 {
-                    var otherName = e.Node.Text;
+                    // otherName은 otherId 관점에서의 내 표시명(상대에게 보일 내 이름)을 사용
+                    var otherName = MultiProfileService.GetDisplayNameForViewer(otherId, _userId);
+                    if (string.IsNullOrWhiteSpace(otherName)) otherName = e.Node.Text;
+
                     // 로그인된 사용자 id(_userId) 가 있어야 함
                     if (_userId <= 0)
                     {

@@ -30,11 +30,21 @@ namespace DBP_team
             try { this.btnChangeImage.Click -= btnChangeImage_Click; this.btnChangeImage.Click += btnChangeImage_Click; } catch { }
             try { this.btnSave.Click -= btnSave_Click; this.btnSave.Click += btnSave_Click; } catch { }
             try { this.btnAddressSearch.Click -= btnAddressSearch_Click; this.btnAddressSearch.Click += btnAddressSearch_Click; } catch { }
+            try { this.btnMultiProfiles.Click -= btnMultiProfiles_Click; this.btnMultiProfiles.Click += btnMultiProfiles_Click; } catch { }
         }
 
         private void ProfileForm_Load(object sender, EventArgs e)
         {
             LoadProfile();
+        }
+
+        private void btnMultiProfiles_Click(object sender, EventArgs e)
+        {
+            using (var f = new UI.MultiProfilesForm(_userId))
+            {
+                f.StartPosition = FormStartPosition.CenterParent;
+                f.ShowDialog(this);
+            }
         }
 
         private void LoadProfile()
@@ -60,7 +70,7 @@ namespace DBP_team
 
                 var row = dt.Rows[0];
 
-                var fullName = row.Table.Columns.Contains("full_name") ? row["full_name"]?.ToString() : string.Empty;
+                var fullName = row.Table.Columns.Contains("full_name") ? row["full_name"].ToString() : string.Empty;
                 if (txtFullName != null)
                     txtFullName.Text = fullName ?? string.Empty;
 

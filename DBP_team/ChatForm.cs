@@ -38,7 +38,9 @@ namespace DBP_team
 
             _myUserId = myUserId;
             _otherUserId = otherUserId;
-            _otherName = string.IsNullOrWhiteSpace(otherName) ? "상대" : otherName;
+            // 대화 상단에 표시할 이름은 otherId 관점에서의 내 표시명으로 교체 (상대에게 내가 어떻게 보이는지)
+            var nameForHeader = MultiProfileService.GetDisplayNameForViewer(_myUserId, _otherUserId);
+            _otherName = string.IsNullOrWhiteSpace(otherName) ? (string.IsNullOrWhiteSpace(nameForHeader) ? "상대" : nameForHeader) : otherName;
 
             labelChat.Text = _otherName;
 
