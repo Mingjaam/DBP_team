@@ -12,6 +12,7 @@ namespace DBP_team.Controls
         private Label lblMessage;
         private Label lblTime;
         private Label lblRead; // add read indicator
+        private Button btnDownload; // added
 
         private const int SIDE_MARGIN = 12;
         private const int DEFAULT_PADDING_H = 8;
@@ -19,6 +20,11 @@ namespace DBP_team.Controls
         private const int TIME_HEIGHT = 16;
         private const int MAX_BUBBLE_PERCENT = 60; // 부모 폭의 %를 최대 폭으로 사용
         private const int MAX_BUBBLE_PIXELS = 420; // 절대 최대 픽셀 폭(원하면 조정)
+
+        private int _fileId = 0;
+        private string _fileName = null;
+
+        public event Action<int, string> OnDownloadRequested; // fileId, filename
 
         public ChatBubbleControl()
         {
@@ -59,6 +65,7 @@ namespace DBP_team.Controls
             this.lblMessage = new Label();
             this.lblTime = new Label();
             this.lblRead = new Label();
+            this.btnDownload = new Button();
 
             // panelBubble 기본 설정
             this.panelBubble.BackColor = Color.LightGray;
@@ -85,10 +92,18 @@ namespace DBP_team.Controls
             this.lblRead.Text = string.Empty;
             this.lblRead.ForeColor = Color.FromArgb(120, 0, 0, 0);
 
+            // btnDownload
+            this.btnDownload.AutoSize = true;
+            this.btnDownload.Text = "다운로드";
+            this.btnDownload.Font = new Font("나눔고딕", 8F);
+            this.btnDownload.Visible = false;
+            this.btnDownload.Click += BtnDownload_Click;
+
             // 조립
             this.panelBubble.Controls.Add(lblMessage);
             this.panelBubble.Controls.Add(lblTime);
             this.panelBubble.Controls.Add(lblRead);
+            this.panelBubble.Controls.Add(btnDownload);
             this.Controls.Add(panelBubble);
 
             // 기본 크기
@@ -98,6 +113,14 @@ namespace DBP_team.Controls
             // 레이아웃 업데이트
             this.Layout += ChatBubbleControl_Layout;
             this.Resize += ChatBubbleControl_Resize;
+        }
+
+        private void BtnDownload_Click(object sender, EventArgs e)
+        {
+            if (_fileId > 0 && OnDownloadRequested != null)
+            {
+                OnDownloadRequested.Invoke(_fileId, _fileName ?? "file");
+            }
         }
 
         private void ChatBubbleControl_Resize(object sender, EventArgs e)
@@ -118,8 +141,11 @@ namespace DBP_team.Controls
             // 읽음 라벨은 좌측 하단, 시간과 같은 y에 두되 좌측 정렬
             lblRead.Location = new Point(panelBubble.Padding.Left, lblTime.Top);
 
+            // btnDownload 위치: 시간 왼쪽에 배치
+            btnDownload.Location = new Point(panelBubble.Padding.Left, lblTime.Top + lblTime.Height + 4);
+
             // panelBubble 높이 자동 확대
-            panelBubble.Height = panelBubble.Padding.Vertical + lblMessage.Height + lblTime.Height + 4;
+            panelBubble.Height = panelBubble.Padding.Vertical + lblMessage.Height + lblTime.Height + (btnDownload.Visible ? btnDownload.Height + 6 : 4);
 
             // 컨트롤 높이
             this.Height = panelBubble.Height + 6;
@@ -217,7 +243,7 @@ namespace DBP_team.Controls
             }
 
             // 8) 높이 재조정
-            panelBubble.Height = panelBubble.Padding.Vertical + lblMessage.Height + lblTime.Height + 4;
+            panelBubble.Height = panelBubble.Padding.Vertical + lblMessage.Height + lblTime.Height + 4 + (btnDownload.Visible ? btnDownload.Height + 6 : 0);
             this.Height = panelBubble.Height + 6;
 
             UpdateBubbleRegion();
@@ -237,6 +263,18 @@ namespace DBP_team.Controls
         public void SetRead(bool isRead)
         {
             lblRead.Text = isRead ? "읽음" : string.Empty;
+        }
+
+        public void SetFile(int fileId, string fileName)
+        {
+            _fileId = fileId;
+            _fileName = fileName;
+            if (!string.IsNullOrEmpty(fileName))
+            {
+                lblMessage.Text = fileName;
+            }
+            btnDownload.Visible = true;
+            this.PerformLayout();
         }
     }
 }

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Drawing;
 using System.Threading.Tasks;
@@ -9,6 +10,9 @@ using System.Net.Sockets;
 using System.IO;
 using System.Text;
 using System.Threading;
+using System.Linq;
+using System.Diagnostics;
+using System.Text.RegularExpressions;
 
 namespace DBP_team
 {
@@ -31,6 +35,10 @@ namespace DBP_team
         private const string ExternalHost = "39.112.89.182";
         private const int ChatServerPort = 9000;
         private static string _resolvedHost; // cached for process lifetime
+
+        private List<Control> _highlighted = new List<Control>();
+        private List<ChatBubbleControl> _searchResults = new List<ChatBubbleControl>();
+        private int _searchIndex = -1;
 
         public ChatForm(int myUserId, int otherUserId, string otherName)
         {
@@ -82,6 +90,9 @@ namespace DBP_team
 
             LoadMessages();
             ConnectToChatServer();
+
+            // ensure search UI is initialized label
+            lblSearchCount.Text = "0/0";
         }
 
         private void ConnectToChatServer()
@@ -260,22 +271,244 @@ namespace DBP_team
             }
         }
 
+        // Ensure chat_files table exists
+        private void EnsureChatFilesTableExists()
+        {
+            try
+            {
+                DBManager.Instance.ExecuteNonQuery(
+                    "CREATE TABLE IF NOT EXISTS chat_files (" +
+                    "id INT AUTO_INCREMENT PRIMARY KEY, " +
+                    "sender_id INT NOT NULL, " +
+                    "receiver_id INT NOT NULL, " +
+                    "filename VARCHAR(255), " +
+                    "content LONGBLOB, " +
+                    "created_at DATETIME DEFAULT CURRENT_TIMESTAMP" +
+                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+            }
+            catch { /* ignore creation errors for now */ }
+        }
+
+        private int SaveFileToDb(int senderId, int receiverId, string filename, byte[] content)
+        {
+            EnsureChatFilesTableExists();
+            try
+            {
+                DBManager.Instance.ExecuteNonQuery(
+                    "INSERT INTO chat_files (sender_id, receiver_id, filename, content, created_at) VALUES (@s,@r,@f,@c,NOW())",
+                    new MySqlParameter("@s", senderId),
+                    new MySqlParameter("@r", receiverId),
+                    new MySqlParameter("@f", filename),
+                    new MySqlParameter("@c", content));
+
+                var idObj = DBManager.Instance.ExecuteScalar("SELECT LAST_INSERT_ID()");
+                if (idObj != null && idObj != DBNull.Value)
+                    return Convert.ToInt32(idObj);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("파일 DB 저장 실패: " + ex.Message, "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            return 0;
+        }
+
+        private void OnBubbleDownloadRequestedHandler(int fileId, string fileName)
+        {
+            try
+            {
+                var dt = DBManager.Instance.ExecuteDataTable(
+                    "SELECT filename, content FROM chat_files WHERE id = @id LIMIT 1",
+                    new MySqlParameter("@id", fileId));
+                if (dt == null || dt.Rows.Count == 0)
+                {
+                    MessageBox.Show("파일을 찾을 수 없습니다.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                var row = dt.Rows[0];
+                var fname = row["filename"]?.ToString() ?? fileName ?? "file";
+                var contentObj = row["content"];
+                byte[] data = null;
+                if (contentObj is byte[] b) data = b;
+                else if (contentObj != DBNull.Value) data = (byte[])contentObj;
+
+                if (data == null)
+                {
+                    MessageBox.Show("파일 데이터가 비어있습니다.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                using (var sfd = new SaveFileDialog())
+                {
+                    // ensure extension preserved
+                    sfd.FileName = fname;
+                    sfd.DefaultExt = Path.GetExtension(fname);
+                    sfd.Filter = "All files (*.*)|*.*";
+                    if (sfd.ShowDialog() != DialogResult.OK) return;
+                    var outPath = sfd.FileName;
+
+                    // if user did not include extension, append original extension
+                    if (string.IsNullOrEmpty(Path.GetExtension(outPath)) && !string.IsNullOrEmpty(Path.GetExtension(fname)))
+                    {
+                        outPath = outPath + Path.GetExtension(fname);
+                    }
+
+                    File.WriteAllBytes(outPath, data);
+                    MessageBox.Show("파일이 저장되었습니다: " + outPath, "다운로드", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    try
+                    {
+                        Process.Start("explorer.exe", "/select,\"" + outPath + "\"");
+                    }
+                    catch { }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("파일 다운로드 오류: " + ex.Message, "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
         private ChatBubbleControl CreateBubble(string message, DateTime time, bool isMine, int id)
         {
             var bubble = new ChatBubbleControl();
+            // set control width to container width so SetData aligns correctly
             bubble.Width = Math.Max(200, _flow.ClientSize.Width);
             bubble.Tag = Tuple.Create(message, time, isMine, id);
+            // call SetData after width is set
             bubble.SetData(message, time, isMine, _flow.ClientSize.Width);
             bubble.Margin = new Padding(0, 6, 0, 6);
+
+            // detect file token format: FILE:{fileId}:{filename}
+            if (!string.IsNullOrEmpty(message) && message.StartsWith("FILE:", StringComparison.OrdinalIgnoreCase))
+            {
+                var parts = message.Split(new[] { ':' }, 3);
+                if (parts.Length == 3 && int.TryParse(parts[1], out int fid))
+                {
+                    var fname = parts[2];
+                    bubble.SetFile(fid, fname);
+                    bubble.OnDownloadRequested += OnBubbleDownloadRequestedHandler;
+                }
+            }
+
             return bubble;
         }
 
-        private void AddBubbleImmediate(string message, DateTime time, bool isMine, int id)
+        private void AddBubbleImmediateFile(int fileId, string filename, DateTime time, bool isMine)
         {
-            var bubble = CreateBubble(message, time, isMine, id);
-            if (isMine) bubble.SetRead(false); // until READ received
+            var bubble = new ChatBubbleControl();
+            bubble.Width = Math.Max(200, _flow.ClientSize.Width);
+            bubble.Tag = Tuple.Create("FILE:" + fileId + ":" + filename, time, isMine, 0);
+            bubble.SetData(string.Empty, time, isMine, _flow.ClientSize.Width);
+            bubble.SetFile(fileId, filename);
+            bubble.Margin = new Padding(0, 6, 0, 6);
+            bubble.OnDownloadRequested += OnBubbleDownloadRequestedHandler;
+            if (isMine) bubble.SetRead(false);
             _flow.Controls.Add(bubble);
             _flow.ScrollControlIntoView(bubble);
+        }
+
+        private void ClearPreviousHighlights()
+        {
+            foreach (var c in _highlighted)
+            {
+                if (c is ChatBubbleControl cb)
+                {
+                    var t = cb.Tag as Tuple<string, DateTime, bool, int>;
+                    if (t != null)
+                    {
+                        var isMine = t.Item3;
+                        // reset by reapplying SetData which restores panel colors
+                        cb.SetData(t.Item1, t.Item2, isMine, _flow.ClientSize.Width);
+                        cb.BackColor = Color.Transparent;
+                    }
+                }
+                else
+                {
+                    try { c.BackColor = Color.Transparent; } catch { }
+                }
+            }
+            _highlighted.Clear();
+            _searchResults.Clear();
+            _searchIndex = -1;
+            lblSearchCount.Text = "0/0";
+        }
+
+        private void btnSearch_Click(object sender, EventArgs e)
+        {
+            var q = txtSearch.Text?.Trim();
+            if (string.IsNullOrEmpty(q))
+            {
+                MessageBox.Show("검색어를 입력하세요.", "검색", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            ClearPreviousHighlights();
+
+            // find all bubbles that contain the query
+            foreach (Control c in _flow.Controls)
+            {
+                if (c is ChatBubbleControl bubble)
+                {
+                    var t = bubble.Tag as Tuple<string, DateTime, bool, int>;
+                    if (t == null) continue;
+                    var msg = t.Item1 ?? string.Empty;
+                    if (msg.IndexOf(q, StringComparison.CurrentCultureIgnoreCase) >= 0)
+                    {
+                        _searchResults.Add(bubble);
+                    }
+                }
+            }
+
+            if (_searchResults.Count == 0)
+            {
+                MessageBox.Show("일치하는 메시지가 없습니다.", "검색", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                lblSearchCount.Text = "0/0";
+                return;
+            }
+
+            // highlight all results and focus on first
+            for (int i = 0; i < _searchResults.Count; i++)
+            {
+                var bubble = _searchResults[i];
+                bubble.BackColor = Color.FromArgb(255, 255, 220);
+                _highlighted.Add(bubble);
+            }
+
+            _searchIndex = 0;
+            lblSearchCount.Text = ($"{_searchIndex + 1}/{_searchResults.Count}");
+            ScrollToSearchIndex();
+        }
+
+        private void ScrollToSearchIndex()
+        {
+            if (_searchIndex < 0 || _searchIndex >= _searchResults.Count) return;
+            var bubble = _searchResults[_searchIndex];
+            _flow.ScrollControlIntoView(bubble);
+            // emphasize current one (darker highlight)
+            foreach (var b in _searchResults)
+            {
+                b.BackColor = Color.FromArgb(255, 255, 220);
+            }
+            var cur = _searchResults[_searchIndex];
+            cur.BackColor = Color.FromArgb(255, 220, 120);
+            // ensure it's in highlighted list
+            if (!_highlighted.Contains(cur)) _highlighted.Add(cur);
+        }
+
+        private void btnSearchNext_Click(object sender, EventArgs e)
+        {
+            if (_searchResults.Count == 0) return;
+            _searchIndex = (_searchIndex + 1) % _searchResults.Count;
+            lblSearchCount.Text = ($"{_searchIndex + 1}/{_searchResults.Count}");
+            ScrollToSearchIndex();
+        }
+
+        private void btnSearchPrev_Click(object sender, EventArgs e)
+        {
+            if (_searchResults.Count == 0) return;
+            _searchIndex = (_searchIndex - 1 + _searchResults.Count) % _searchResults.Count;
+            lblSearchCount.Text = ($"{_searchIndex + 1}/{_searchResults.Count}");
+            ScrollToSearchIndex();
         }
 
         private void button1_Click(object sender, EventArgs e)
@@ -324,6 +557,97 @@ namespace DBP_team
         private void ChatForm_Load(object sender, EventArgs e)
         {
             // 폼 로드시 추가 초기화가 필요하면 작성
+        }
+
+        // --- New handlers for search, emoji, file ---
+        private void btnEmoji_Click(object sender, EventArgs e)
+        {
+            // 간단한 팝업으로 몇 가지 이모티콘을 선택하게 함
+            var menu = new ContextMenuStrip();
+            var emojis = new[] { "😀", "😁", "😂", "😍", "😢", "😮", "👍", "👎", "🎉" };
+            foreach (var em in emojis)
+            {
+                var item = new ToolStripMenuItem(em);
+                item.Click += (s, ev) => { InsertEmoji(em); };
+                menu.Items.Add(item);
+            }
+            menu.Show(btnEmoji, new Point(0, -menu.Size.Height));
+        }
+
+        private void InsertEmoji(string emoji)
+        {
+            var pos = txtChat.SelectionStart;
+            txtChat.Text = txtChat.Text.Insert(pos, emoji);
+            txtChat.SelectionStart = pos + emoji.Length;
+            txtChat.Focus();
+        }
+
+        private void btnFile_Click(object sender, EventArgs e)
+        {
+            using (var dlg = new OpenFileDialog())
+            {
+                dlg.Multiselect = false;
+                dlg.Title = "파일 전송";
+                if (dlg.ShowDialog() != DialogResult.OK) return;
+                var path = dlg.FileName;
+
+                try
+                {
+                    var bytes = File.ReadAllBytes(path);
+
+                    // If zip, validate header quickly
+                    if (Path.GetExtension(path).Equals(".zip", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (bytes.Length < 4 || bytes[0] != (byte)'P' || bytes[1] != (byte)'K')
+                        {
+                            MessageBox.Show("선택한 파일은 ZIP 형식이 아닙니다.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            return;
+                        }
+                    }
+
+                    // save to DB
+                    var fileId = SaveFileToDb(_myUserId, _otherUserId, Path.GetFileName(path), bytes);
+                    if (fileId <= 0)
+                    {
+                        MessageBox.Show("파일을 DB에 저장하지 못했습니다.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        return;
+                    }
+
+                    // send file token via chat server so other side gets notified and message persisted
+                    var token = "FILE:" + fileId + ":" + Path.GetFileName(path);
+                    var line = "MSG|" + _myUserId + "|" + _otherUserId + "|" + EncodeBase64(token);
+                    _writer?.WriteLine(line);
+
+                    // locally show file bubble immediately
+                    AddBubbleImmediateFile(fileId, Path.GetFileName(path), DateTime.Now, true);
+
+                    MessageBox.Show("파일 전송 요청이 전송되었습니다.", "파일 전송", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("파일 처리 중 오류: " + ex.Message, "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+        private void AddBubbleImmediate(string message, DateTime time, bool isMine, int id)
+        {
+            if (!string.IsNullOrEmpty(message) && message.StartsWith("FILE:", StringComparison.OrdinalIgnoreCase))
+            {
+                // message format: FILE:{fileId}:{filename}
+                var parts = message.Split(new[] { ':' }, 3);
+                if (parts.Length == 3 && int.TryParse(parts[1], out int fid))
+                {
+                    var fname = parts[2];
+                    AddBubbleImmediateFile(fid, fname, time, isMine);
+                    return;
+                }
+            }
+
+            var bubble = CreateBubble(message, time, isMine, id);
+            if (isMine) bubble.SetRead(false); // until READ received
+            _flow.Controls.Add(bubble);
+            _flow.ScrollControlIntoView(bubble);
         }
     }
 }
