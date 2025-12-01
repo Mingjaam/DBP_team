@@ -327,6 +327,17 @@ namespace DBP_team
 
                 var row = dt.Rows[0];
                 var fname = row["filename"]?.ToString() ?? fileName ?? "file";
+                // If DB filename lacks extension but the caller provided a filename with extension, append it.
+                try
+                {
+                    var dbExt = Path.GetExtension(fname);
+                    if (string.IsNullOrEmpty(dbExt) && !string.IsNullOrEmpty(fileName))
+                    {
+                        var pExt = Path.GetExtension(fileName);
+                        if (!string.IsNullOrEmpty(pExt)) fname = fname + pExt;
+                    }
+                }
+                catch { }
                 var contentObj = row["content"];
                 byte[] data = null;
                 if (contentObj is byte[] b) data = b;
@@ -342,7 +353,12 @@ namespace DBP_team
                 {
                     // ensure extension preserved
                     sfd.FileName = fname;
-                    sfd.DefaultExt = Path.GetExtension(fname);
+                    // DefaultExt should not contain leading dot
+                    var ext = Path.GetExtension(fname);
+                    if (!string.IsNullOrEmpty(ext))
+                    {
+                        sfd.DefaultExt = ext.StartsWith(".") ? ext.Substring(1) : ext;
+                    }
                     sfd.Filter = "All files (*.*)|*.*";
                     if (sfd.ShowDialog() != DialogResult.OK) return;
                     var outPath = sfd.FileName;
