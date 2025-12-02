@@ -14,11 +14,42 @@ namespace DBP_team
         public Loginform()
         {
             InitializeComponent();
+
+            txtPwd.UseSystemPasswordChar = true;
+
         }
 
         private void Form1_Load(object sender, EventArgs e)
         {
+            txtId.Text = Properties.Settings.Default.SavedId;
+            txtPwd.Text = Properties.Settings.Default.SavedPwd;
+            chkRemember.Checked = Properties.Settings.Default.RememberMe;
+            chkAutoLogin.Checked = Properties.Settings.Default.AutoLogin;
 
+            // 자동 로그인
+            if (chkAutoLogin.Checked &&
+                !string.IsNullOrWhiteSpace(txtId.Text) &&
+                !string.IsNullOrWhiteSpace(txtPwd.Text))
+            {
+                var result = MessageBox.Show(
+                    "저장된 계정으로 자동 로그인 하시겠습니까?",
+                    "자동 로그인",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question);
+
+                if (result == DialogResult.Yes)
+                {
+                    this.BeginInvoke(new Action(() =>
+                    {
+                        btnLogin.PerformClick();
+                    }));
+                }
+                else
+                {
+                    chkAutoLogin.Checked = false;
+                    SaveLoginSettings();
+                }
+            }
         }
 
         private void folderBrowserDialog1_HelpRequest(object sender, EventArgs e)
@@ -129,6 +160,8 @@ namespace DBP_team
 
                 AppSession.CurrentUser = user;
 
+                SaveLoginSettings();
+
                 Form next;
                 if (AdminGuard.IsAdmin(user))
                 {
@@ -147,6 +180,57 @@ namespace DBP_team
             catch (Exception ex)
             {
                 MessageBox.Show("로그인 중 오류가 발생했습니다: " + ex.Message, "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void chkRemember_CheckedChanged(object sender, EventArgs e)
+        {
+            if (!chkRemember.Checked)
+            {
+                chkAutoLogin.Checked = false;
+            }
+        }
+
+        private void chkAutoLogin_CheckedChanged(object sender, EventArgs e)
+        {
+            if (chkAutoLogin.Checked && !chkRemember.Checked)
+            {
+                chkRemember.Checked = true;
+            }
+        }
+
+        private void SaveLoginSettings()
+        {
+            if (chkRemember.Checked)
+            {
+                Properties.Settings.Default.SavedId = txtId.Text.Trim();
+                Properties.Settings.Default.SavedPwd = txtPwd.Text;
+                Properties.Settings.Default.RememberMe = true;
+            }
+            else
+            {
+                Properties.Settings.Default.SavedId = "";
+                Properties.Settings.Default.SavedPwd = "";
+                Properties.Settings.Default.RememberMe = false;
+            }
+
+            // 자동로그인 여부는 체크박스 상태 그대로 저장
+            Properties.Settings.Default.AutoLogin = chkAutoLogin.Checked;
+
+            Properties.Settings.Default.Save();
+        }
+        private bool _passwordVisible = false;
+        private void btnTogglePwd_Click(object sender, EventArgs e)
+        {
+            _passwordVisible = !_passwordVisible;
+
+            if (_passwordVisible)
+            {
+                txtPwd.UseSystemPasswordChar = false;
+            }
+            else
+            {
+                txtPwd.UseSystemPasswordChar = true;
             }
         }
     }
