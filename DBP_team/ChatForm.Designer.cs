@@ -120,7 +120,7 @@
             this.lblSearchCount.AutoSize = true;
             this.lblSearchCount.Location = new System.Drawing.Point(365, 31);
             this.lblSearchCount.Name = "lblSearchCount";
-            this.lblSearchCount.Size = new System.Drawing.Size(35, 12);
+            this.lblSearchCount.Size = new System.Drawing.Size(23, 12);
             this.lblSearchCount.TabIndex = 10;
             this.lblSearchCount.Text = "0/0";
             // 
@@ -148,7 +148,7 @@
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 12F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(379, 626);
+            this.ClientSize = new System.Drawing.Size(391, 626);
             this.Controls.Add(this.btnFile);
             this.Controls.Add(this.btnEmoji);
             this.Controls.Add(this.btnSearchNext);

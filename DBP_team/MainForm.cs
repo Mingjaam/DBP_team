@@ -325,7 +325,7 @@ namespace DBP_team
                     "  SELECT CASE WHEN sender_id = @me THEN receiver_id ELSE sender_id END AS other_id, MAX(created_at) AS last_at " +
                     "  FROM chat WHERE sender_id = @me OR receiver_id = @me GROUP BY other_id" +
                     ") c2 ON u.id = c2.other_id " +
-                    "LEFT JOIN chat c ON ((c.sender_id = @me AND c.receiver_id = u.id) OR (c.sender_id = u.id && c.receiver_id = @me)) AND c.created_at = c2.last_at " +
+                    "LEFT JOIN chat c ON ((c.sender_id = @me && c.receiver_id = u.id) OR (c.sender_id = u.id && c.receiver_id = @me)) AND c.created_at = c2.last_at " +
                     "ORDER BY c2.last_at DESC",
                     new MySqlParameter("@me", _userId));
 

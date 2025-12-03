@@ -88,11 +88,32 @@ namespace DBP_team
 
             btnSend.Text = "전송";
 
+            // txtChat에서 Enter 키로 전송하도록 KeyDown 핸들러 등록
+            try
+            {
+                txtChat.KeyDown -= TxtChat_KeyDown;
+                txtChat.KeyDown += TxtChat_KeyDown;
+            }
+            catch
+            {
+                // 디자이너에서 txtChat이 없을 경우 무시
+            }
+
             LoadMessages();
             ConnectToChatServer();
 
             // ensure search UI is initialized label
             lblSearchCount.Text = "0/0";
+        }
+
+        private void TxtChat_KeyDown(object sender, KeyEventArgs e)
+        {
+            // Enter 누르면 메시지 전송 (Shift+Enter는 줄바꿈 허용)
+            if (e.KeyCode == Keys.Enter && (Control.ModifierKeys & Keys.Shift) == 0)
+            {
+                e.SuppressKeyPress = true; // 줄바꿈 방지
+                SendChatMessage();
+            }
         }
 
         private void ConnectToChatServer()
@@ -173,6 +194,15 @@ namespace DBP_team
                         int.TryParse(parts[1], out from);
                         int.TryParse(parts[2], out to);
                         var msg = DecodeBase64(parts[3]);
+
+                        // Prevent duplicate display for self-chat:
+                        // When sending to ourselves we already AddBubbleImmediate locally,
+                        // so ignore the server-echoed message that would cause a duplicate.
+                        if (from == _myUserId && to == _myUserId)
+                        {
+                            continue;
+                        }
+
                         if (from == _otherUserId && to == _myUserId)
                         {
                             var time = DateTime.Now;
@@ -528,7 +558,7 @@ namespace DBP_team
             ScrollToSearchIndex();
         }
 
-        private void button1_Click(object sender, EventArgs e)
+        private void SendChatMessage()
         {
             var text = txtChat.Text?.Trim();
             if (string.IsNullOrWhiteSpace(text))
@@ -553,6 +583,11 @@ namespace DBP_team
             {
                 MessageBox.Show("메시지 전송 중 오류: " + ex.Message, "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private void button1_Click(object sender, EventArgs e)
+        {
+            SendChatMessage();
         }
 
         private void ChatForm_FormClosed(object sender, FormClosedEventArgs e)
