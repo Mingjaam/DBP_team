@@ -7,9 +7,9 @@ using System.Windows.Forms;
 
 namespace DBP_team.UI
 {
-    // 그룹(표시 이름) 단위만 관리하는 간단한 폼 (개별 보기 제거)
     public class MultiProfilesForm : Form
     {
+        // 그룹(표시 이름) 단위만 관리하는 간단한 폼 (개별 보기 제거)
         private readonly int _ownerUserId;
         private ListView _list;
         private Button _btnAddGroup;
@@ -26,29 +26,72 @@ namespace DBP_team.UI
 
         private void InitializeComponent()
         {
-            this.Text = "멀티프로필 그룹 관리";
-            this.Size = new Size(640, 500);
+            this.Text = "DBP Talk - 멀티프로필 그룹 관리";
+            this.Size = new Size(680, 550);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
+            this.StartPosition = FormStartPosition.CenterParent;
+            this.BackColor = Color.White;
+            this.Font = new Font("맑은 고딕", 9F);
 
             _list = new ListView
             {
-                Left = 10,
-                Top = 10,
-                Width = 610,
-                Height = 380,
+                Left = 15,
+                Top = 15,
+                Width = 640,
+                Height = 430,
                 View = View.Details,
                 FullRowSelect = true,
-                MultiSelect = false
+                MultiSelect = false,
+                BorderStyle = BorderStyle.FixedSingle,
+                Font = new Font("맑은 고딕", 9F)
             };
             _imageList = new ImageList { ImageSize = new Size(40, 40), ColorDepth = ColorDepth.Depth32Bit };
             _list.SmallImageList = _imageList;
             ConfigureGroupColumns();
 
-            _btnAddGroup = new Button { Text = "추가", Width = 80, Left = 10, Top = 400 };
-            _btnEditGroup = new Button { Text = "수정", Width = 80, Left = 100, Top = 400 };
-            _btnDeleteGroup = new Button { Text = "삭제", Width = 80, Left = 190, Top = 400 };
+            _btnAddGroup = new Button
+            {
+                Text = "추가",
+                Width = 90,
+                Height = 32,
+                Left = 15,
+                Top = 460,
+                Font = new Font("맑은 고딕", 9F, FontStyle.Bold),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(74, 144, 226),
+                ForeColor = Color.White
+            };
+            _btnAddGroup.FlatAppearance.BorderSize = 0;
+
+            _btnEditGroup = new Button
+            {
+                Text = "수정",
+                Width = 90,
+                Height = 32,
+                Left = 115,
+                Top = 460,
+                Font = new Font("맑은 고딕", 9F),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(240, 240, 240),
+                ForeColor = Color.FromArgb(80, 80, 80)
+            };
+            _btnEditGroup.FlatAppearance.BorderSize = 0;
+
+            _btnDeleteGroup = new Button
+            {
+                Text = "삭제",
+                Width = 90,
+                Height = 32,
+                Left = 215,
+                Top = 460,
+                Font = new Font("맑은 고딕", 9F),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(240, 240, 240),
+                ForeColor = Color.FromArgb(80, 80, 80)
+            };
+            _btnDeleteGroup.FlatAppearance.BorderSize = 0;
 
             _btnAddGroup.Click += (s, e) => AddOrEditGroup(null);
             _btnEditGroup.Click += (s, e) =>
@@ -77,9 +120,9 @@ namespace DBP_team.UI
         private void ConfigureGroupColumns()
         {
             _list.Columns.Clear();
-            _list.Columns.Add("그룹 이름", 180);
-            _list.Columns.Add("대상 수", 80, HorizontalAlignment.Right);
-            _list.Columns.Add("대표 사진", 80);
+            _list.Columns.Add("그룹 이름", 200);
+            _list.Columns.Add("대상 수", 100, HorizontalAlignment.Right);
+            _list.Columns.Add("대표 사진", 100);
             _list.Columns.Add("생성", 120);
             _list.Columns.Add("수정", 120);
         }

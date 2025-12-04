@@ -34,29 +34,122 @@ namespace DBP_team.UI
         private void InitializeComponent()
         {
             this.Text = _mappingId == null ? "¸ÖÆ¼ÇÁ·ÎÇÊ Ãß°¡" : "¸ÖÆ¼ÇÁ·ÎÇÊ ¼öÁ¤";
-            this.Size = new Size(520, 520);
+            this.Size = new Size(560, 580);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
+            this.StartPosition = FormStartPosition.CenterParent;
+            this.BackColor = Color.White;
+            this.Font = new Font("¸¼Àº °íµñ", 9F);
 
-            var lblN = new Label { Text = "ÀÌ¸§", Left = 12, Top = 16, Width = 60 };
-            _txtName = new TextBox { Left = 80, Top = 12, Width = 400 };
-            _pic = new PictureBox { Left = 12, Top = 44, Width = 120, Height = 120, BorderStyle = BorderStyle.FixedSingle, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.WhiteSmoke };
-            _btnImage = new Button { Left = 140, Top = 44, Width = 120, Height = 26, Text = "»çÁø ¼±ÅÃ" };
+            var pnlTop = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 200,
+                BackColor = Color.FromArgb(250, 250, 250),
+                Padding = new Padding(15)
+            };
+
+            var lblN = new Label
+            {
+                Text = "ÀÌ¸§",
+                Left = 15,
+                Top = 15,
+                Width = 60,
+                Font = new Font("¸¼Àº °íµñ", 9F, FontStyle.Bold)
+            };
+            _txtName = new TextBox
+            {
+                Left = 80,
+                Top = 12,
+                Width = 450,
+                BorderStyle = BorderStyle.FixedSingle,
+                Font = new Font("¸¼Àº °íµñ", 10F)
+            };
+
+            _pic = new PictureBox
+            {
+                Left = 15,
+                Top = 50,
+                Width = 130,
+                Height = 130,
+                BorderStyle = BorderStyle.FixedSingle,
+                SizeMode = PictureBoxSizeMode.Zoom,
+                BackColor = Color.FromArgb(245, 245, 245)
+            };
+
+            _btnImage = new Button
+            {
+                Left = 155,
+                Top = 50,
+                Width = 130,
+                Height = 32,
+                Text = "»çÁø ¼±ÅÃ",
+                Font = new Font("¸¼Àº °íµñ", 9F),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(240, 240, 240),
+                ForeColor = Color.FromArgb(80, 80, 80)
+            };
+            _btnImage.FlatAppearance.BorderSize = 0;
             _btnImage.Click += (s, e) => ChooseImage();
 
-            var lblT = new Label { Text = "º¸ÀÌ´Â »ç¶÷ ¼±ÅÃ", Left = 12, Top = 176, Width = 200 };
-            _lstTargets = new CheckedListBox { Left = 12, Top = 200, Width = 468, Height = 240, CheckOnClick = true };
+            pnlTop.Controls.Add(lblN);
+            pnlTop.Controls.Add(_txtName);
+            pnlTop.Controls.Add(_pic);
+            pnlTop.Controls.Add(_btnImage);
 
-            _btnSave = new Button { Text = "ÀúÀå", Left = 316, Top = 456, Width = 76 };
-            _btnCancel = new Button { Text = "Ãë¼Ò", Left = 404, Top = 456, Width = 76 };
+            var lblT = new Label
+            {
+                Text = "º¸ÀÌ´Â »ç¶÷ ¼±ÅÃ",
+                Left = 15,
+                Top = 215,
+                Width = 200,
+                Font = new Font("¸¼Àº °íµñ", 9F, FontStyle.Bold)
+            };
+
+            _lstTargets = new CheckedListBox
+            {
+                Left = 15,
+                Top = 240,
+                Width = 520,
+                Height = 240,
+                CheckOnClick = true,
+                BorderStyle = BorderStyle.FixedSingle,
+                Font = new Font("¸¼Àº °íµñ", 9F)
+            };
+
+            _btnSave = new Button
+            {
+                Text = "ÀúÀå",
+                Left = 350,
+                Top = 495,
+                Width = 85,
+                Height = 35,
+                Font = new Font("¸¼Àº °íµñ", 9F, FontStyle.Bold),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(74, 144, 226),
+                ForeColor = Color.White
+            };
+            _btnSave.FlatAppearance.BorderSize = 0;
+
+            _btnCancel = new Button
+            {
+                Text = "Ãë¼Ò",
+                Left = 445,
+                Top = 495,
+                Width = 85,
+                Height = 35,
+                Font = new Font("¸¼Àº °íµñ", 9F),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(240, 240, 240),
+                ForeColor = Color.FromArgb(80, 80, 80)
+            };
+            _btnCancel.FlatAppearance.BorderSize = 0;
+
             _btnSave.Click += (s, e) => Save();
             _btnCancel.Click += (s, e) => this.DialogResult = DialogResult.Cancel;
 
-            this.Controls.Add(lblN);
-            this.Controls.Add(_txtName);
-            this.Controls.Add(_pic);
-            this.Controls.Add(_btnImage);
+            this.Controls.Add(pnlTop);
             this.Controls.Add(lblT);
             this.Controls.Add(_lstTargets);
             this.Controls.Add(_btnSave);
