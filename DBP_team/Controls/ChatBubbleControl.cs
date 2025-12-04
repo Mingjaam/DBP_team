@@ -68,7 +68,7 @@ namespace DBP_team.Controls
             this.btnDownload = new Button();
 
             // panelBubble 기본 설정
-            this.panelBubble.BackColor = Color.LightGray;
+            this.panelBubble.BackColor = Color.FromArgb(240, 240, 240);
             this.panelBubble.Padding = new Padding(DEFAULT_PADDING_H, DEFAULT_PADDING_V, DEFAULT_PADDING_H, DEFAULT_PADDING_V + 2);
             this.panelBubble.AutoSize = true;
             this.panelBubble.AutoSizeMode = AutoSizeMode.GrowAndShrink;
@@ -76,28 +76,33 @@ namespace DBP_team.Controls
             // lblMessage
             this.lblMessage.AutoSize = true;
             this.lblMessage.MaximumSize = new Size(300, 0); // 런타임에서 조정
-            this.lblMessage.Font = new Font("나눔고딕", 10F, FontStyle.Regular);
-            this.lblMessage.ForeColor = Color.Black;
+            this.lblMessage.Font = new Font("맑은 고딕", 10F, FontStyle.Regular);
+            this.lblMessage.ForeColor = Color.FromArgb(50, 50, 50);
 
             // lblTime: 오른쪽 정렬을 위해 AutoSize=false, 폭을 패널 폭에 맞춤
             this.lblTime.AutoSize = false;
             this.lblTime.Height = 14;
-            this.lblTime.Font = new Font("나눔고딕", 8F);
+            this.lblTime.Font = new Font("맑은 고딕", 8F);
             this.lblTime.TextAlign = ContentAlignment.MiddleRight;
-            this.lblTime.ForeColor = Color.FromArgb(120, 0, 0, 0);
+            this.lblTime.ForeColor = Color.FromArgb(120, 120, 120);
 
             // lblRead: 왼쪽 아래 작은 표시
             this.lblRead.AutoSize = true;
-            this.lblRead.Font = new Font("나눔고딕", 8F);
+            this.lblRead.Font = new Font("맑은 고딕", 8F);
             this.lblRead.Text = string.Empty;
-            this.lblRead.ForeColor = Color.FromArgb(120, 0, 0, 0);
+            this.lblRead.ForeColor = Color.FromArgb(120, 120, 120);
 
             // btnDownload
             this.btnDownload.AutoSize = true;
             this.btnDownload.Text = "다운로드";
-            this.btnDownload.Font = new Font("나눔고딕", 8F);
+            this.btnDownload.Font = new Font("맑은 고딕", 8F);
             this.btnDownload.Visible = false;
             this.btnDownload.Click += BtnDownload_Click;
+            this.btnDownload.FlatStyle = FlatStyle.Flat;
+            this.btnDownload.FlatAppearance.BorderSize = 1;
+            this.btnDownload.FlatAppearance.BorderColor = Color.FromArgb(200, 200, 200);
+            this.btnDownload.BackColor = Color.White;
+            this.btnDownload.ForeColor = Color.FromArgb(80, 80, 80);
 
             // 조립
             this.panelBubble.Controls.Add(lblMessage);
@@ -237,9 +242,9 @@ namespace DBP_team.Controls
             {
                 panelBubble.Left = SIDE_MARGIN;
                 panelBubble.BackColor = Color.FromArgb(240, 240, 240);
-                lblMessage.ForeColor = Color.Black;
-                lblTime.ForeColor = Color.FromArgb(120, 0, 0, 0);
-                lblRead.ForeColor = Color.FromArgb(120, 0, 0, 0);
+                lblMessage.ForeColor = Color.FromArgb(50, 50, 50);
+                lblTime.ForeColor = Color.FromArgb(120, 120, 120);
+                lblRead.ForeColor = Color.FromArgb(120, 120, 120);
             }
 
             // 8) 높이 재조정

@@ -16,11 +16,11 @@ namespace DBP_team
         private Label lblStatus;
         private Button btnOk;
         private Button btnCancel;
+        private Panel pnlTop;
 
         public string SelectedPostalCode { get; private set; }
         public string SelectedAddress { get; private set; }
 
-        // Juso API confmKey provided by user
         private const string JusoConfmKey = "devU01TX0FVVEgyMDI1MTEwNjE1MzQwOTExNjQxMTc=";
 
         public AddressSearchForm(string initialQuery = null)
@@ -32,35 +32,107 @@ namespace DBP_team
         private void InitializeComponent()
         {
             this.Text = "ÁÖ¼Ò °Ë»ö";
-            this.ClientSize = new Size(560, 360);
+            this.ClientSize = new Size(600, 450);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
             this.StartPosition = FormStartPosition.CenterParent;
+            this.BackColor = Color.White;
+            this.Font = new Font("¸¼Àº °íµñ", 9F);
 
-            txtQuery = new TextBox { Location = new Point(12, 12), Size = new Size(436, 24) };
-            btnSearch = new Button { Location = new Point(456, 10), Size = new Size(92, 26), Text = "°Ë»ö" };
-            listResults = new ListBox { Location = new Point(12, 44), Size = new Size(536, 260) };
-            lblStatus = new Label { Location = new Point(12, 308), Size = new Size(536, 20), Text = "" };
-            btnOk = new Button { Location = new Point(372, 332), Size = new Size(80, 28), Text = "È®ÀÎ" };
-            btnCancel = new Button { Location = new Point(468, 332), Size = new Size(80, 28), Text = "Ãë¼Ò" };
+            pnlTop = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 70,
+                BackColor = Color.FromArgb(250, 250, 250),
+                Padding = new Padding(15)
+            };
 
-            // --- ÀÌº¥Æ® ÇÚµé·¯¸¦ º°µµ ¸Þ¼­µå·Î ¿¬°á ---
+            var lblTitle = new Label
+            {
+                Text = "ÁÖ¼Ò °Ë»ö",
+                Font = new Font("¸¼Àº °íµñ", 12F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(50, 50, 50),
+                Location = new Point(15, 10),
+                AutoSize = true
+            };
+
+            txtQuery = new TextBox
+            {
+                Location = new Point(15, 38),
+                Size = new Size(450, 25),
+                Font = new Font("¸¼Àº °íµñ", 10F),
+                BorderStyle = BorderStyle.FixedSingle
+            };
+
+            btnSearch = new Button
+            {
+                Location = new Point(475, 36),
+                Size = new Size(100, 29),
+                Text = "°Ë»ö",
+                Font = new Font("¸¼Àº °íµñ", 9F, FontStyle.Bold),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(74, 144, 226),
+                ForeColor = Color.White
+            };
+            btnSearch.FlatAppearance.BorderSize = 0;
+
+            listResults = new ListBox
+            {
+                Location = new Point(15, 85),
+                Size = new Size(570, 300),
+                Font = new Font("¸¼Àº °íµñ", 9F),
+                BorderStyle = BorderStyle.FixedSingle
+            };
+
+            lblStatus = new Label
+            {
+                Location = new Point(15, 390),
+                Size = new Size(570, 20),
+                Text = "",
+                Font = new Font("¸¼Àº °íµñ", 9F),
+                ForeColor = Color.FromArgb(120, 120, 120)
+            };
+
+            btnOk = new Button
+            {
+                Location = new Point(395, 415),
+                Size = new Size(90, 32),
+                Text = "È®ÀÎ",
+                Font = new Font("¸¼Àº °íµñ", 9F, FontStyle.Bold),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(74, 144, 226),
+                ForeColor = Color.White
+            };
+            btnOk.FlatAppearance.BorderSize = 0;
+
+            btnCancel = new Button
+            {
+                Location = new Point(495, 415),
+                Size = new Size(90, 32),
+                Text = "Ãë¼Ò",
+                Font = new Font("¸¼Àº °íµñ", 9F),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(240, 240, 240),
+                ForeColor = Color.FromArgb(80, 80, 80)
+            };
+            btnCancel.FlatAppearance.BorderSize = 0;
+
             btnSearch.Click += BtnSearch_Click;
             listResults.DoubleClick += ListResults_DoubleClick;
             btnOk.Click += BtnOk_Click;
             btnCancel.Click += BtnCancel_Click;
-            // -----------------------------------------
 
-            this.Controls.Add(txtQuery);
-            this.Controls.Add(btnSearch);
+            pnlTop.Controls.Add(lblTitle);
+            pnlTop.Controls.Add(txtQuery);
+            pnlTop.Controls.Add(btnSearch);
+
+            this.Controls.Add(pnlTop);
             this.Controls.Add(listResults);
             this.Controls.Add(lblStatus);
             this.Controls.Add(btnOk);
             this.Controls.Add(btnCancel);
         }
-
-        // --- ÀÌº¥Æ® ÇÚµé·¯ ¸Þ¼­µå ±¸Çö ---
 
         private async void BtnSearch_Click(object sender, EventArgs e)
         {
@@ -83,7 +155,6 @@ namespace DBP_team
             this.Close();
         }
 
-        // --- ·ÎÁ÷ ¸Þ¼­µå ---
         private void AcceptSelection()
         {
             if (listResults.SelectedItem == null) return;
