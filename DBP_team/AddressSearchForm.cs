@@ -99,7 +99,8 @@ namespace DBP_team
             this.Controls.Add(this.btnOk);
             this.Controls.Add(this.btnCancel);
             this.Name = "AddressSearchForm";
-            this.Text = "ㄴ";
+            this.Text = "주소 검색";
+            this.Load += new System.EventHandler(this.AddressSearchForm_Load);
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -234,6 +235,11 @@ namespace DBP_team
             public string PostalCode { get; set; }
             public string Address { get; set; }
             public override string ToString() => $"[{PostalCode}] {Address}";
+        }
+
+        private void AddressSearchForm_Load(object sender, EventArgs e)
+        {
+
         }
     }
 }
