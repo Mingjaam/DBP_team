@@ -6,6 +6,7 @@ using System.Windows.Forms;
 using MySql.Data.MySqlClient;
 using DBP_team.Models;
 using System.Text;
+using System.ComponentModel;
 
 namespace DBP_team
 {
@@ -14,156 +15,61 @@ namespace DBP_team
         private readonly User _me;
         private readonly int _companyId;
 
-        private TabControl _tabs, mainTabControl;
-
-        private TextBox _txtDeptName, _txtDeptSearch;
-        private Button _btnDeptAdd, _btnDeptUpdate, _btnDeptSearch;
-        private DataGridView _gridDept;
-
-        private TextBox _txtUserSearch;
-        private ComboBox _cboDeptForUser;
-        private Button _btnUserSearch, _btnApplyDept;
-        private DataGridView _gridUsers;
-
-        private DateTimePicker _dtFrom, _dtTo;
-        private TextBox _txtKeyword;
-        private ComboBox _cboUserFilter;
-        private Button _btnChatSearch;
-        private DataGridView _gridChat;
-
-        private DateTimePicker dtpStart;
-        private DateTimePicker dtpEnd;
-        private TextBox txtSearchUser;
-        private Button btnSearchLog;
-        private DataGridView _gridLogs;
+        // Designer-friendly parameterless constructor
+        public AdminForm() : this(new User { Id = 0, CompanyId = 0, FullName = "관리자" })
+        {
+        }
 
         public AdminForm(User me)
         {
-            _me = me ?? throw new ArgumentNullException(nameof(me));
-            _companyId = me.CompanyId ?? 0;
+            _me = me ?? new User { Id = 0, CompanyId = 0, FullName = "관리자" };
+            _companyId = _me.CompanyId ?? 0;
 
-            if (!AdminGuard.IsAdmin(me))
+            InitializeComponent();
+
+            // Detect design-time reliably
+            bool isDesignTime = LicenseManager.UsageMode == LicenseUsageMode.Designtime;
+
+            if (!isDesignTime)
             {
-                MessageBox.Show("관리자 권한이 없습니다.", "권한 오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                Close();
-                return;
+                if (!AdminGuard.IsAdmin(_me))
+                {
+                    MessageBox.Show("관리자만 접근 가능합니다.", "권한 없음", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    this.Load += (s, e) => this.Close(); // 폼 로드 후 바로 닫기
+                    return;
+                }
+
+                // DateTimePicker 값 설정
+                _dtFrom.Value = DateTime.Now.Date.AddDays(-7);
+                _dtTo.Value = DateTime.Now.Date.AddDays(1).AddSeconds(-1);
             }
-
-            Text = "DBP Talk - 관리자 콘솔";
-            Width = 1024;
-            Height = 720;
-            StartPosition = FormStartPosition.CenterScreen;
-            BackColor = Color.White;
-            Font = new Font("맑은 고딕", 9F);
-
-            BuildUi();
-            LoadDeptGrid();
-            LoadDeptComboForUser();
-            LoadUsersGrid();
-            LoadUserFilterCombo();
         }
 
-        private void BuildUi()
+        private void AdminForm_Load(object sender, EventArgs e)
         {
-            _tabs = new TabControl { Dock = DockStyle.Fill };
-
-            var pageDept = new TabPage("부서관리");
-            var pnlDeptTop = new Panel { Dock = DockStyle.Top, Height = 60, Padding = new Padding(8), BackColor = Color.FromArgb(250, 250, 250) };
-
-            var lblDeptName = new Label { Text = "부서명", AutoSize = true, Top = 12, Left = 8, Font = new Font("맑은 고딕", 9F) };
-            _txtDeptName = new TextBox { Width = 220, Left = 60, Top = 8 };
-            _btnDeptAdd = new Button { Text = "등록", Left = 290, Top = 7, Width = 80 };
-            _btnDeptUpdate = new Button { Text = "변경", Left = 375, Top = 7, Width = 80 };
-
-            var lblDeptSearch = new Label { Text = "검색(부서명)", AutoSize = true, Top = 12, Left = 470, Font = new Font("맑은 고딕", 9F) };
-            _txtDeptSearch = new TextBox { Left = 560, Top = 8, Width = 220 };
-            _btnDeptSearch = new Button { Text = "검색", Left = 785, Top = 7, Width = 80 };
-
-            _btnDeptAdd.Click += (s, e) => AddDepartment();
-            _btnDeptUpdate.Click += (s, e) => UpdateDepartment();
-            _btnDeptSearch.Click += (s, e) => LoadDeptGrid(_txtDeptSearch.Text?.Trim());
-
-            pnlDeptTop.Controls.Add(lblDeptName);
-            pnlDeptTop.Controls.Add(_txtDeptName);
-            pnlDeptTop.Controls.Add(_btnDeptAdd);
-            pnlDeptTop.Controls.Add(_btnDeptUpdate);
-            pnlDeptTop.Controls.Add(lblDeptSearch);
-            pnlDeptTop.Controls.Add(_txtDeptSearch);
-            pnlDeptTop.Controls.Add(_btnDeptSearch);
-
-            _gridDept = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, SelectionMode = DataGridViewSelectionMode.FullRowSelect, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill };
-            _gridDept.MultiSelect = false;
-            _gridDept.CellClick += (s, e) => { if (e.RowIndex >= 0) _txtDeptName.Text = Convert.ToString(_gridDept.Rows[e.RowIndex].Cells["name"].Value); };
-            pageDept.Controls.Add(_gridDept);
-            pageDept.Controls.Add(pnlDeptTop);
-
-            var pageUserDept = new TabPage("사용자 소속 변경");
-            var pnlUserTop = new Panel { Dock = DockStyle.Top, Height = 60, Padding = new Padding(8), BackColor = Color.FromArgb(250, 250, 250) };
-
-            var lblUserSearch = new Label { Text = "사용자 검색", AutoSize = true, Top = 12, Left = 8, Font = new Font("맑은 고딕", 9F) };
-            _txtUserSearch = new TextBox { Width = 240, Left = 80, Top = 8 };
-            _btnUserSearch = new Button { Text = "검색", Left = 325, Top = 7, Width = 80 };
-            _btnUserSearch.Click += (s, e) => LoadUsersGrid(_txtUserSearch.Text?.Trim());
-
-            var lblDeptSelect = new Label { Text = "부서 선택", AutoSize = true, Top = 12, Left = 420, Font = new Font("맑은 고딕", 9F) };
-            _cboDeptForUser = new ComboBox { Left = 480, Top = 8, Width = 240, DropDownStyle = ComboBoxStyle.DropDownList };
-            _btnApplyDept = new Button { Text = "선택 사용자 소속 변경", Left = 725, Top = 7, Width = 180 };
-            _btnApplyDept.Click += (s, e) => ApplyUserDepartment();
-
-            pnlUserTop.Controls.Add(lblUserSearch);
-            pnlUserTop.Controls.Add(_txtUserSearch);
-            pnlUserTop.Controls.Add(_btnUserSearch);
-            pnlUserTop.Controls.Add(lblDeptSelect);
-            pnlUserTop.Controls.Add(_cboDeptForUser);
-            pnlUserTop.Controls.Add(_btnApplyDept);
-
-            _gridUsers = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, SelectionMode = DataGridViewSelectionMode.FullRowSelect, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill };
-            _gridUsers.MultiSelect = true;
-            pageUserDept.Controls.Add(_gridUsers);
-            pageUserDept.Controls.Add(pnlUserTop);
-
-            var pageChat = new TabPage("대화 검색");
-            var pnlChatTop = new Panel { Dock = DockStyle.Top, Height = 70, Padding = new Padding(8), BackColor = Color.FromArgb(250, 250, 250) };
-
-            var lblFrom = new Label { Text = "시작일", AutoSize = true, Top = 12, Left = 8, Font = new Font("맑은 고딕", 9F) };
-            _dtFrom = new DateTimePicker { Width = 140, Left = 60, Top = 8, Value = DateTime.Now.Date.AddDays(-7) };
-
-            var lblTo = new Label { Text = "종료일", AutoSize = true, Top = 12, Left = 210, Font = new Font("맑은 고딕", 9F) };
-            _dtTo = new DateTimePicker { Left = 260, Top = 8, Width = 140, Value = DateTime.Now.Date.AddDays(1).AddSeconds(-1) };
-
-            var lblKeyword = new Label { Text = "키워드", AutoSize = true, Top = 12, Left = 410, Font = new Font("맑은 고딕", 9F) };
-            _txtKeyword = new TextBox { Left = 455, Top = 8, Width = 220 };
-
-            var lblUser = new Label { Text = "사용자", AutoSize = true, Top = 12, Left = 685, Font = new Font("맑은 고딕", 9F) };
-            _cboUserFilter = new ComboBox { Left = 730, Top = 8, Width = 200, DropDownStyle = ComboBoxStyle.DropDownList };
-
-            _btnChatSearch = new Button { Text = "검색", Left = 940, Top = 7, Width = 60 };
-            _btnChatSearch.Click += (s, e) => LoadChatGrid();
-
-            pnlChatTop.Controls.Add(lblFrom);
-            pnlChatTop.Controls.Add(_dtFrom);
-            pnlChatTop.Controls.Add(lblTo);
-            pnlChatTop.Controls.Add(_dtTo);
-            pnlChatTop.Controls.Add(lblKeyword);
-            pnlChatTop.Controls.Add(_txtKeyword);
-            pnlChatTop.Controls.Add(lblUser);
-            pnlChatTop.Controls.Add(_cboUserFilter);
-            pnlChatTop.Controls.Add(_btnChatSearch);
-
-            _gridChat = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, SelectionMode = DataGridViewSelectionMode.FullRowSelect, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill };
-            pageChat.Controls.Add(_gridChat);
-            pageChat.Controls.Add(pnlChatTop);
-
-            var pageAccessLogs = CreateAccessLogsTab();
-
-            _tabs.TabPages.Add(pageDept);
-            _tabs.TabPages.Add(pageUserDept);
-            _tabs.TabPages.Add(pageChat);
-            _tabs.TabPages.Add(pageAccessLogs);
-            Controls.Add(_tabs);
-
-            ApplyStyles();
+            if (LicenseManager.UsageMode != LicenseUsageMode.Designtime)
+            {
+                LoadDeptGrid();
+                LoadDeptComboForUser();
+                LoadUsersGrid();
+                LoadUserFilterCombo();
+                SearchAccessLogs(); // 초기 접속 로그 로드
+            }
         }
+
+        private void DeptAdd_Click(object sender, EventArgs e) => AddDepartment();
+        private void DeptUpdate_Click(object sender, EventArgs e) => UpdateDepartment();
+        private void DeptSearch_Click(object sender, EventArgs e) => LoadDeptGrid(_txtDeptSearch.Text?.Trim());
+        private void DeptGrid_CellClick(object sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex >= 0) _txtDeptName.Text = Convert.ToString(_gridDept.Rows[e.RowIndex].Cells["name"].Value);
+        }
+        private void UserSearch_Click(object sender, EventArgs e) => LoadUsersGrid(_txtUserSearch.Text?.Trim());
+        private void ApplyDept_Click(object sender, EventArgs e) => ApplyUserDepartment();
+        private void ChatSearch_Click(object sender, EventArgs e) => LoadChatGrid();
+        private void SearchLog_Click(object sender, EventArgs e) => SearchAccessLogs();
+        private void GridChat_CellClick(object sender, DataGridViewCellEventArgs e) { /* 필요한 경우 구현 */ }
+        private void GridLogs_CellClick(object sender, DataGridViewCellEventArgs e) { /* 필요한 경우 구현 */ }
 
         private void LoadDeptGrid(string keyword = null)
         {
@@ -192,7 +98,7 @@ namespace DBP_team
 
         private void UpdateDepartment()
         {
-            if (_gridDept.CurrentRow == null) { MessageBox.Show("행을 선택하세요."); return; }
+            if (_gridDept.CurrentRow == null) { MessageBox.Show("수정할 부서를 선택하세요."); return; }
             var id = Convert.ToInt32((_gridDept.CurrentRow.DataBoundItem as DataRowView)["id"]);
             var name = _txtDeptName.Text?.Trim();
             if (string.IsNullOrWhiteSpace(name)) { MessageBox.Show("부서명을 입력하세요."); return; }
@@ -288,58 +194,6 @@ namespace DBP_team
             if (_gridChat.Columns.Contains("created_at")) _gridChat.Columns["created_at"].HeaderText = "시간";
         }
 
-        private TabPage CreateAccessLogsTab()
-        {
-            var tabPage = new TabPage("접속 이력");
-
-            var pnlSearch = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Top,
-                AutoSize = true,
-                Padding = new Padding(8),
-                WrapContents = false,
-                BackColor = Color.FromArgb(250, 250, 250)
-            };
-            var lblDate = new Label { Text = "기간:", Anchor = AnchorStyles.Left, AutoSize = true, Margin = new Padding(3, 6, 0, 3), Font = new Font("맑은 고딕", 9F) };
-            dtpStart = new DateTimePicker { Format = DateTimePickerFormat.Short, Width = 100, Margin = new Padding(3) };
-            var lblDateSeparator = new Label { Text = "~", Anchor = AnchorStyles.Left, AutoSize = true, Margin = new Padding(3, 6, 0, 3) };
-            dtpEnd = new DateTimePicker { Format = DateTimePickerFormat.Short, Width = 100, Margin = new Padding(3) };
-            var lblUser = new Label { Text = "사용자:", Anchor = AnchorStyles.Left, AutoSize = true, Margin = new Padding(15, 6, 0, 3), Font = new Font("맑은 고딕", 9F) };
-            txtSearchUser = new TextBox { Width = 150, Margin = new Padding(3) };
-            btnSearchLog = new Button { Text = "검색", Width = 80, Margin = new Padding(10, 0, 3, 0) };
-            btnSearchLog.Click += (s, e) => SearchAccessLogs();
-            pnlSearch.Controls.AddRange(new Control[] { lblDate, dtpStart, lblDateSeparator, dtpEnd, lblUser, txtSearchUser, btnSearchLog });
-
-            _gridLogs = new DataGridView
-            {
-                Dock = DockStyle.Fill,
-                ReadOnly = true,
-                AllowUserToAddRows = false,
-                SelectionMode = DataGridViewSelectionMode.FullRowSelect,
-                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill
-            };
-
-            tabPage.Controls.Add(_gridLogs);
-            tabPage.Controls.Add(pnlSearch);
-
-            this.Shown += (s, e) =>
-            {
-                if (_gridLogs != null && !this.IsDisposed && _tabs.SelectedTab == tabPage)
-                {
-                    SearchAccessLogs();
-                }
-            };
-            _tabs.SelectedIndexChanged += (s, e) =>
-            {
-                if (_tabs.SelectedTab == tabPage)
-                {
-                    SearchAccessLogs();
-                }
-            };
-
-            return tabPage;
-        }
-
         private void SearchAccessLogs()
         {
             if (_gridLogs == null) return;
@@ -396,61 +250,6 @@ namespace DBP_team
             {
                 MessageBox.Show("로그 검색 중 오류 발생: " + ex.Message, "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-        }
-
-        private void ApplyStyles()
-        {
-            StyleButton(_btnDeptAdd, true);
-            StyleButton(_btnDeptUpdate);
-            StyleButton(_btnDeptSearch);
-            StyleButton(_btnUserSearch);
-            StyleButton(_btnApplyDept, true);
-            StyleButton(_btnChatSearch);
-            StyleButton(btnSearchLog);
-
-            StyleTextBox(_txtDeptName);
-            StyleTextBox(_txtDeptSearch);
-            StyleTextBox(_txtUserSearch);
-            StyleTextBox(_txtKeyword);
-            StyleTextBox(txtSearchUser);
-
-            StyleDataGrid(_gridDept);
-            StyleDataGrid(_gridUsers);
-            StyleDataGrid(_gridChat);
-            StyleDataGrid(_gridLogs);
-        }
-
-        private void StyleButton(Button btn, bool isPrimary = false)
-        {
-            btn.FlatStyle = FlatStyle.Flat;
-            btn.Font = new Font("맑은 고딕", 9F, isPrimary ? FontStyle.Bold : FontStyle.Regular);
-            if (isPrimary)
-            {
-                btn.BackColor = Color.FromArgb(74, 144, 226);
-                btn.ForeColor = Color.White;
-            }
-            else
-            {
-                btn.BackColor = Color.FromArgb(240, 240, 240);
-                btn.ForeColor = Color.FromArgb(80, 80, 80);
-            }
-            btn.FlatAppearance.BorderSize = 0;
-        }
-
-        private void StyleTextBox(TextBox txt)
-        {
-            txt.BorderStyle = BorderStyle.FixedSingle;
-            txt.Font = new Font("맑은 고딕", 9F);
-        }
-
-        private void StyleDataGrid(DataGridView grid)
-        {
-            grid.BorderStyle = BorderStyle.None;
-            grid.BackgroundColor = Color.White;
-            grid.Font = new Font("맑은 고딕", 9F);
-            grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(250, 250, 250);
-            grid.ColumnHeadersDefaultCellStyle.Font = new Font("맑은 고딕", 9F, FontStyle.Bold);
-            grid.EnableHeadersVisualStyles = false;
         }
     }
 }

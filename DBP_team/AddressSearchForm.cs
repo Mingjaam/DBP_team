@@ -8,130 +8,101 @@ using System.Windows.Forms;
 
 namespace DBP_team
 {
-    public class AddressSearchForm : Form
+    public partial class AddressSearchForm : Form
     {
+        public string SelectedPostalCode { get; private set; }
+        public string SelectedAddress { get; private set; }
+        private const string JusoConfmKey = "devU01TX0FVVEgyMDI1MTEwNjE1MzQwOTExNjQxMTc=";
+
+        // 누락된 컨트롤 필드 추가
         private TextBox txtQuery;
         private Button btnSearch;
         private ListBox listResults;
         private Label lblStatus;
         private Button btnOk;
         private Button btnCancel;
-        private Panel pnlTop;
-
-        public string SelectedPostalCode { get; private set; }
-        public string SelectedAddress { get; private set; }
-
-        private const string JusoConfmKey = "devU01TX0FVVEgyMDI1MTEwNjE1MzQwOTExNjQxMTc=";
 
         public AddressSearchForm(string initialQuery = null)
         {
             InitializeComponent();
-            if (!string.IsNullOrWhiteSpace(initialQuery)) txtQuery.Text = initialQuery;
+            if (!string.IsNullOrWhiteSpace(initialQuery)) this.txtQuery.Text = initialQuery;
         }
 
+        // 최소한의 InitializeComponent 구현
         private void InitializeComponent()
         {
-            this.Text = "주소 검색";
-            this.ClientSize = new Size(600, 450);
-            this.FormBorderStyle = FormBorderStyle.FixedDialog;
-            this.MaximizeBox = false;
-            this.MinimizeBox = false;
-            this.StartPosition = FormStartPosition.CenterParent;
-            this.BackColor = Color.White;
-            this.Font = new Font("맑은 고딕", 9F);
+            this.txtQuery = new System.Windows.Forms.TextBox();
+            this.btnSearch = new System.Windows.Forms.Button();
+            this.listResults = new System.Windows.Forms.ListBox();
+            this.lblStatus = new System.Windows.Forms.Label();
+            this.btnOk = new System.Windows.Forms.Button();
+            this.btnCancel = new System.Windows.Forms.Button();
+            this.SuspendLayout();
+            // 
+            // txtQuery
+            // 
+            this.txtQuery.Location = new System.Drawing.Point(12, 12);
+            this.txtQuery.Name = "txtQuery";
+            this.txtQuery.Size = new System.Drawing.Size(360, 21);
+            this.txtQuery.TabIndex = 0;
+            // 
+            // btnSearch
+            // 
+            this.btnSearch.Location = new System.Drawing.Point(378, 10);
+            this.btnSearch.Name = "btnSearch";
+            this.btnSearch.Size = new System.Drawing.Size(75, 23);
+            this.btnSearch.TabIndex = 1;
+            this.btnSearch.Text = "검색";
+            this.btnSearch.Click += new System.EventHandler(this.BtnSearch_Click);
+            // 
+            // listResults
+            // 
+            this.listResults.ItemHeight = 12;
+            this.listResults.Location = new System.Drawing.Point(12, 39);
+            this.listResults.Name = "listResults";
+            this.listResults.Size = new System.Drawing.Size(441, 196);
+            this.listResults.TabIndex = 2;
+            this.listResults.DoubleClick += new System.EventHandler(this.ListResults_DoubleClick);
+            // 
+            // lblStatus
+            // 
+            this.lblStatus.Location = new System.Drawing.Point(12, 245);
+            this.lblStatus.Name = "lblStatus";
+            this.lblStatus.Size = new System.Drawing.Size(300, 23);
+            this.lblStatus.TabIndex = 3;
+            // 
+            // btnOk
+            // 
+            this.btnOk.Location = new System.Drawing.Point(297, 274);
+            this.btnOk.Name = "btnOk";
+            this.btnOk.Size = new System.Drawing.Size(75, 23);
+            this.btnOk.TabIndex = 4;
+            this.btnOk.Text = "확인";
+            this.btnOk.Click += new System.EventHandler(this.BtnOk_Click);
+            // 
+            // btnCancel
+            // 
+            this.btnCancel.Location = new System.Drawing.Point(378, 274);
+            this.btnCancel.Name = "btnCancel";
+            this.btnCancel.Size = new System.Drawing.Size(75, 23);
+            this.btnCancel.TabIndex = 5;
+            this.btnCancel.Text = "취소";
+            this.btnCancel.Click += new System.EventHandler(this.BtnCancel_Click);
+            // 
+            // AddressSearchForm
+            // 
+            this.ClientSize = new System.Drawing.Size(465, 309);
+            this.Controls.Add(this.txtQuery);
+            this.Controls.Add(this.btnSearch);
+            this.Controls.Add(this.listResults);
+            this.Controls.Add(this.lblStatus);
+            this.Controls.Add(this.btnOk);
+            this.Controls.Add(this.btnCancel);
+            this.Name = "AddressSearchForm";
+            this.Text = "ㄴ";
+            this.ResumeLayout(false);
+            this.PerformLayout();
 
-            pnlTop = new Panel
-            {
-                Dock = DockStyle.Top,
-                Height = 70,
-                BackColor = Color.FromArgb(250, 250, 250),
-                Padding = new Padding(15)
-            };
-
-            var lblTitle = new Label
-            {
-                Text = "주소 검색",
-                Font = new Font("맑은 고딕", 12F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(50, 50, 50),
-                Location = new Point(15, 10),
-                AutoSize = true
-            };
-
-            txtQuery = new TextBox
-            {
-                Location = new Point(15, 38),
-                Size = new Size(450, 25),
-                Font = new Font("맑은 고딕", 10F),
-                BorderStyle = BorderStyle.FixedSingle
-            };
-
-            btnSearch = new Button
-            {
-                Location = new Point(475, 36),
-                Size = new Size(100, 29),
-                Text = "검색",
-                Font = new Font("맑은 고딕", 9F, FontStyle.Bold),
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Color.FromArgb(74, 144, 226),
-                ForeColor = Color.White
-            };
-            btnSearch.FlatAppearance.BorderSize = 0;
-
-            listResults = new ListBox
-            {
-                Location = new Point(15, 85),
-                Size = new Size(570, 300),
-                Font = new Font("맑은 고딕", 9F),
-                BorderStyle = BorderStyle.FixedSingle
-            };
-
-            lblStatus = new Label
-            {
-                Location = new Point(15, 390),
-                Size = new Size(570, 20),
-                Text = "",
-                Font = new Font("맑은 고딕", 9F),
-                ForeColor = Color.FromArgb(120, 120, 120)
-            };
-
-            btnOk = new Button
-            {
-                Location = new Point(395, 415),
-                Size = new Size(90, 32),
-                Text = "확인",
-                Font = new Font("맑은 고딕", 9F, FontStyle.Bold),
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Color.FromArgb(74, 144, 226),
-                ForeColor = Color.White
-            };
-            btnOk.FlatAppearance.BorderSize = 0;
-
-            btnCancel = new Button
-            {
-                Location = new Point(495, 415),
-                Size = new Size(90, 32),
-                Text = "취소",
-                Font = new Font("맑은 고딕", 9F),
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Color.FromArgb(240, 240, 240),
-                ForeColor = Color.FromArgb(80, 80, 80)
-            };
-            btnCancel.FlatAppearance.BorderSize = 0;
-
-            btnSearch.Click += BtnSearch_Click;
-            listResults.DoubleClick += ListResults_DoubleClick;
-            btnOk.Click += BtnOk_Click;
-            btnCancel.Click += BtnCancel_Click;
-
-            pnlTop.Controls.Add(lblTitle);
-            pnlTop.Controls.Add(txtQuery);
-            pnlTop.Controls.Add(btnSearch);
-
-            this.Controls.Add(pnlTop);
-            this.Controls.Add(listResults);
-            this.Controls.Add(lblStatus);
-            this.Controls.Add(btnOk);
-            this.Controls.Add(btnCancel);
         }
 
         private async void BtnSearch_Click(object sender, EventArgs e)
@@ -157,8 +128,8 @@ namespace DBP_team
 
         private void AcceptSelection()
         {
-            if (listResults.SelectedItem == null) return;
-            var item = listResults.SelectedItem as AddressResult;
+            if (this.listResults.SelectedItem == null) return;
+            var item = this.listResults.SelectedItem as AddressResult;
             if (item == null) return;
             SelectedPostalCode = item.PostalCode;
             SelectedAddress = item.Address;
@@ -168,7 +139,7 @@ namespace DBP_team
 
         private async Task DoSearchAsync()
         {
-            var q = txtQuery.Text?.Trim();
+            var q = this.txtQuery.Text?.Trim();
             if (string.IsNullOrWhiteSpace(q))
             {
                 MessageBox.Show("검색어를 입력하세요.", "입력 오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -177,26 +148,26 @@ namespace DBP_team
 
             try
             {
-                lblStatus.Text = "검색 중...";
-                btnSearch.Enabled = false;
-                listResults.Items.Clear();
+                this.lblStatus.Text = "검색 중...";
+                this.btnSearch.Enabled = false;
+                this.listResults.Items.Clear();
 
                 var results = await SearchAddressAsync(q);
                 foreach (var r in results)
                 {
-                    listResults.Items.Add(r);
+                    this.listResults.Items.Add(r);
                 }
 
-                lblStatus.Text = results.Count == 0 ? "결과가 없습니다." : $"결과 {results.Count}건";
+                this.lblStatus.Text = results.Count == 0 ? "결과가 없습니다." : $"결과 {results.Count}건";
             }
             catch (Exception ex)
             {
                 MessageBox.Show("주소 검색 오류: " + ex.Message, "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                lblStatus.Text = "검색 실패";
+                this.lblStatus.Text = "검색 실패";
             }
             finally
             {
-                btnSearch.Enabled = true;
+                this.btnSearch.Enabled = true;
             }
         }
 
