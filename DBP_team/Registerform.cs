@@ -18,6 +18,9 @@ namespace DBP_team
         {
             InitializeComponent();
             UI.IconHelper.ApplyAppIcon(this);
+            // Ensure Load event is wired so combo boxes are populated
+            this.Load -= formRegister_Load;
+            this.Load += formRegister_Load;
         }
 
         private void formRegister_Load(object sender, EventArgs e)
