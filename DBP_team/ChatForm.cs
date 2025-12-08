@@ -44,6 +44,7 @@ namespace DBP_team
         public ChatForm(int myUserId, int otherUserId, string otherName)
         {
             InitializeComponent();
+            UI.IconHelper.ApplyAppIcon(this);
 
             _myUserId = myUserId;
             _otherUserId = otherUserId;

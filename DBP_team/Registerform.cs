@@ -17,6 +17,7 @@ namespace DBP_team
         public Registerform()
         {
             InitializeComponent();
+            UI.IconHelper.ApplyAppIcon(this);
         }
 
         private void formRegister_Load(object sender, EventArgs e)

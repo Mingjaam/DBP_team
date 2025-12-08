@@ -14,6 +14,7 @@ namespace DBP_team
         public Loginform()
         {
             InitializeComponent();
+            UI.IconHelper.ApplyAppIcon(this);
 
             txtPwd.UseSystemPasswordChar = true;
 

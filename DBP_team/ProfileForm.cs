@@ -15,6 +15,7 @@ namespace DBP_team
         public ProfileForm(int userId)
         {
             InitializeComponent();
+            UI.IconHelper.ApplyAppIcon(this);
             _userId = userId;
 
             if (pictureProfile == null || labelFullName == null)

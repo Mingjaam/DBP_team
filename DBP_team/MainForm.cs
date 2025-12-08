@@ -50,9 +50,13 @@ namespace DBP_team
             return _visibleUserIds != null && _visibleUserIds.Contains(otherUserId);
         }
 
+        private int _lastNotifSenderId;
+        private string _lastNotifSenderName;
+
         public MainForm()
         {
             InitializeComponent();
+            UI.IconHelper.ApplyAppIcon(this);
             HookTreeEvents();
 
             // initialize status images
@@ -511,35 +515,44 @@ namespace DBP_team
 
                 if (_pollTimer == null)
                 {
-                    _pollTimer = new System.Windows.Forms.Timer();
-                    _pollTimer.Interval = 3000; // 3초
+                    _pollTimer = new System.Windows.Forms.Timer { Interval = 3000 };
                     _pollTimer.Tick += PollTimer_Tick;
                 }
-
                 if (_notifyIcon == null)
                 {
                     _notifyIcon = new NotifyIcon();
-                    _notifyIcon.Icon = SystemIcons.Application;
+                    _notifyIcon.Icon = UI.IconHelper.GetAppIcon();
                     _notifyIcon.Visible = true;
                     _notifyIcon.BalloonTipTitle = "새 메시지";
-                    _notifyIcon.BalloonTipClicked += (s, e) =>
-                    {
-                        // 사용자가 풍선을 클릭하면 최근 리스트 갱신
-                        LoadRecentChats();
-                    };
+                    _notifyIcon.BalloonTipClicked -= NotifyIcon_BalloonTipClicked;
+                    _notifyIcon.BalloonTipClicked += NotifyIcon_BalloonTipClicked;
                 }
-
                 _pollTimer.Start();
             }
-            catch
+            catch { }
+        }
+
+        private void NotifyIcon_BalloonTipClicked(object sender, EventArgs e)
+        {
+            try
             {
-                // 폴링 초기화 실패 무시
+                if (_userId <= 0 || _lastNotifSenderId <= 0) return;
+                if (ChatBanDAO.IsChatBanned(_userId, _lastNotifSenderId))
+                {
+                    MessageBox.Show("관리자 정책에 의해 대화가 제한된 사용자입니다.");
+                    return;
+                }
+                var mpName = MultiProfileService.GetDisplayNameForViewer(_lastNotifSenderId, _userId);
+                var disp = string.IsNullOrWhiteSpace(mpName) ? (_lastNotifSenderName ?? "상대") : mpName;
+                var chat = new ChatForm(_userId, _lastNotifSenderId, disp);
+                chat.StartPosition = FormStartPosition.CenterParent;
+                chat.Show(this);
             }
+            catch { }
         }
 
         private async void PollTimer_Tick(object sender, EventArgs e)
         {
-            // 비동기 DB 호출: 새로 온 나에게 향한 메시지(created_at > _lastPollTime)
             try
             {
                 if (_userId <= 0) return;
@@ -565,22 +578,27 @@ namespace DBP_team
                         var created = r["created_at"] != DBNull.Value ? Convert.ToDateTime(r["created_at"]) : DateTime.Now;
                         if (created > newest) newest = created;
 
+                        // 마지막 알림 상대 저장 (풍선 클릭 시 바로 열기)
+                        _lastNotifSenderId = senderId;
+                        _lastNotifSenderName = baseName;
+
                         // 짧게 메시지 표시 (최대 80자)
                         var shortMsg = message.Length > 80 ? message.Substring(0, 77) + "..." : message;
-                        // Show balloon (non-modal)
                         try
                         {
-                            _notifyIcon.BalloonTipTitle = $"새 메시지: {baseName}";
-                            _notifyIcon.BalloonTipText = shortMsg;
-                            _notifyIcon.ShowBalloonTip(4000);
+                            if (_notifyIcon != null)
+                            {
+                                _notifyIcon.Visible = true; // 일부 환경에서 필요
+                                _notifyIcon.BalloonTipTitle = $"새 메시지: {baseName}";
+                                _notifyIcon.BalloonTipText = shortMsg;
+                                _notifyIcon.ShowBalloonTip(4000);
+                            }
                         }
                         catch { }
                     }
 
-                    // 최신 시간 갱신
                     _lastPollTime = newest;
 
-                    // 새 메시지 탐지 시 최근 리스트 갱신 (UI thread)
                     try
                     {
                         if (!this.IsDisposed && this.IsHandleCreated)
@@ -589,10 +607,7 @@ namespace DBP_team
                     catch { }
                 }
             }
-            catch
-            {
-                // 폴링 중 오류는 무시(로그 필요 시 추가)
-            }
+            catch { }
         }
 
         // Stop polling and dispose notify icon on close

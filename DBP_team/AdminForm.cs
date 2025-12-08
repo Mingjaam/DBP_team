@@ -22,6 +22,7 @@ namespace DBP_team
 
         public AdminForm(User me)
         {
+            UI.IconHelper.ApplyAppIcon(this);
             _me = me ?? new User { Id = 0, CompanyId = 0, FullName = "관리자" };
             _companyId = _me.CompanyId ?? 0;
 
