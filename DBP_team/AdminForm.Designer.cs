@@ -76,6 +76,15 @@ namespace DBP_team
             this.txtSearchUser = new System.Windows.Forms.TextBox();
             this.btnSearchLog = new System.Windows.Forms.Button();
             this._gridLogs = new System.Windows.Forms.DataGridView();
+            this.pageChatBan = new System.Windows.Forms.TabPage();
+            this._pnlBanTop = new System.Windows.Forms.FlowLayoutPanel();
+            this.labelUserA = new System.Windows.Forms.Label();
+            this._cbUser1 = new System.Windows.Forms.ComboBox();
+            this.labelUserB = new System.Windows.Forms.Label();
+            this._cbUser2 = new System.Windows.Forms.ComboBox();
+            this._btnBlock = new System.Windows.Forms.Button();
+            this._btnUnblock = new System.Windows.Forms.Button();
+            this._lvBans = new System.Windows.Forms.ListView();
 
             this._tabs.SuspendLayout();
             this.pageDept.SuspendLayout();
@@ -90,6 +99,8 @@ namespace DBP_team
             this.pageAccessLogs.SuspendLayout();
             this.pnlSearch.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this._gridLogs)).BeginInit();
+            this.pageChatBan.SuspendLayout();
+            this._pnlBanTop.SuspendLayout();
             this.SuspendLayout();
 
             // 
@@ -99,6 +110,7 @@ namespace DBP_team
             this._tabs.Controls.Add(this.pageUserDept);
             this._tabs.Controls.Add(this.pageChat);
             this._tabs.Controls.Add(this.pageAccessLogs);
+            this._tabs.Controls.Add(this.pageChatBan);
             this._tabs.Dock = System.Windows.Forms.DockStyle.Fill;
             this._tabs.Name = "_tabs";
             this._tabs.SelectedIndex = 0;
@@ -483,6 +495,70 @@ namespace DBP_team
             this._gridLogs.CellClick += new System.Windows.Forms.DataGridViewCellEventHandler(this.GridLogs_CellClick);
 
             // 
+            // pageChatBan
+            // 
+            this.pageChatBan.Controls.Add(this._lvBans);
+            this.pageChatBan.Controls.Add(this._pnlBanTop);
+            this.pageChatBan.Location = new System.Drawing.Point(4, 24);
+            this.pageChatBan.Name = "pageChatBan";
+            this.pageChatBan.Padding = new System.Windows.Forms.Padding(3);
+            this.pageChatBan.Size = new System.Drawing.Size(1016, 692);
+            this.pageChatBan.TabIndex = 4;
+            this.pageChatBan.Text = "대화 권한 관리";
+            this.pageChatBan.UseVisualStyleBackColor = true;
+
+            // 
+            // _pnlBanTop
+            // 
+            this._pnlBanTop.Dock = System.Windows.Forms.DockStyle.Top;
+            this._pnlBanTop.Padding = new System.Windows.Forms.Padding(8);
+            this._pnlBanTop.Height = 60;
+            this._pnlBanTop.BackColor = System.Drawing.Color.FromArgb(250, 250, 250);
+            this._pnlBanTop.Controls.Add(this.labelUserA);
+            this._pnlBanTop.Controls.Add(this._cbUser1);
+            this._pnlBanTop.Controls.Add(this.labelUserB);
+            this._pnlBanTop.Controls.Add(this._cbUser2);
+            this._pnlBanTop.Controls.Add(this._btnBlock);
+            this._pnlBanTop.Controls.Add(this._btnUnblock);
+
+            this.labelUserA.AutoSize = true;
+            this.labelUserA.Text = "사용자 A";
+            this.labelUserA.Margin = new System.Windows.Forms.Padding(3, 8, 3, 3);
+
+            this._cbUser1.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            this._cbUser1.Width = 220;
+
+            this.labelUserB.AutoSize = true;
+            this.labelUserB.Text = "사용자 B";
+            this.labelUserB.Margin = new System.Windows.Forms.Padding(15, 8, 3, 3);
+
+            this._cbUser2.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            this._cbUser2.Width = 220;
+
+            this._btnBlock.Text = "차단하기";
+            this._btnBlock.Width = 100;
+            this._btnBlock.Height = 25;
+            this._btnBlock.Margin = new System.Windows.Forms.Padding(15, 6, 3, 3);
+            this._btnBlock.Click += new System.EventHandler(this.btnBlock_Click);
+
+            this._btnUnblock.Text = "차단 해제";
+            this._btnUnblock.Width = 100;
+            this._btnUnblock.Height = 25;
+            this._btnUnblock.Margin = new System.Windows.Forms.Padding(8, 6, 3, 3);
+            this._btnUnblock.Click += new System.EventHandler(this.btnUnblock_Click);
+
+            // 
+            // _lvBans
+            // 
+            this._lvBans.Dock = System.Windows.Forms.DockStyle.Fill;
+            this._lvBans.View = System.Windows.Forms.View.Details;
+            this._lvBans.FullRowSelect = true;
+            this._lvBans.HideSelection = false;
+            this._lvBans.Columns.Add("사용자 A", 200);
+            this._lvBans.Columns.Add("사용자 B", 200);
+            this._lvBans.Columns.Add("차단 시각", 180);
+
+            // 
             // AdminForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
@@ -513,6 +589,9 @@ namespace DBP_team
             this.pnlSearch.ResumeLayout(false);
             this.pnlSearch.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this._gridLogs)).EndInit();
+            this.pageChatBan.ResumeLayout(false);
+            this._pnlBanTop.ResumeLayout(false);
+            this._pnlBanTop.PerformLayout();
             this.ResumeLayout(false);
         }
 
@@ -560,5 +639,14 @@ namespace DBP_team
         private System.Windows.Forms.TextBox txtSearchUser;
         private System.Windows.Forms.Button btnSearchLog;
         private System.Windows.Forms.DataGridView _gridLogs;
+        private System.Windows.Forms.TabPage pageChatBan;
+        private System.Windows.Forms.FlowLayoutPanel _pnlBanTop;
+        private System.Windows.Forms.ComboBox _cbUser1;
+        private System.Windows.Forms.ComboBox _cbUser2;
+        private System.Windows.Forms.Button _btnBlock;
+        private System.Windows.Forms.Button _btnUnblock;
+        private System.Windows.Forms.ListView _lvBans;
+        private System.Windows.Forms.Label labelUserA;
+        private System.Windows.Forms.Label labelUserB;
     }
 }

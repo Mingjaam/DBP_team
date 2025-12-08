@@ -15,6 +15,8 @@ namespace DBP_team
         private readonly User _me;
         private readonly int _companyId;
 
+        // Chat ban controls are declared in Designer.cs to be designer-friendly
+
         // Designer-friendly parameterless constructor
         public AdminForm() : this(new User { Id = 0, CompanyId = 0, FullName = "관리자" })
         {
@@ -39,9 +41,9 @@ namespace DBP_team
                     return;
                 }
 
-                // DateTimePicker 값 설정
-                _dtFrom.Value = DateTime.Now.Date.AddDays(-7);
-                _dtTo.Value = DateTime.Now.Date.AddDays(1).AddSeconds(-1);
+                // Runtime UI injection for chat ban management will be done on Load
+                this.Load -= AdminForm_Load;
+                this.Load += AdminForm_Load;
             }
         }
 
@@ -49,11 +51,18 @@ namespace DBP_team
         {
             if (LicenseManager.UsageMode != LicenseUsageMode.Designtime)
             {
+                // DateTimePicker 초기값 설정 (디자인 타임 접근 방지)
+                if (_dtFrom != null) _dtFrom.Value = DateTime.Now.Date.AddDays(-7);
+                if (_dtTo != null) _dtTo.Value = DateTime.Now.Date.AddDays(1).AddSeconds(-1);
+
                 LoadDeptGrid();
                 LoadDeptComboForUser();
                 LoadUsersGrid();
                 LoadUserFilterCombo();
                 SearchAccessLogs(); // 초기 접속 로그 로드
+
+                // Runtime UI injection for chat ban management
+                InitializeChatBanUI();
             }
         }
 
@@ -249,6 +258,120 @@ namespace DBP_team
             catch (Exception ex)
             {
                 MessageBox.Show("로그 검색 중 오류 발생: " + ex.Message, "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        // --- Chat Ban Management ---
+        private void InitializeChatBanUI()
+        {
+            // Designer provides pageChatBan and controls; just bind data
+            if (pageChatBan == null) return;
+            LoadUserList();
+            LoadBanList();
+        }
+
+        private void LoadUserList()
+        {
+            var dt = DBManager.Instance.ExecuteDataTable(
+                "SELECT id, COALESCE(full_name,email) AS name FROM users WHERE company_id=@cid ORDER BY name",
+                new MySqlParameter("@cid", _companyId));
+
+            _cbUser1.DataSource = dt.Copy();
+            _cbUser1.DisplayMember = "name";
+            _cbUser1.ValueMember = "id";
+            _cbUser1.SelectedIndex = -1;
+
+            _cbUser2.DataSource = dt;
+            _cbUser2.DisplayMember = "name";
+            _cbUser2.ValueMember = "id";
+            _cbUser2.SelectedIndex = -1;
+        }
+
+        private void LoadBanList()
+        {
+            string sql = @"
+                SELECT b.id, b.user_id_1, b.user_id_2, b.created_at,
+                       u1.full_name AS name1, u2.full_name AS name2
+                FROM chat_bans b
+                JOIN users u1 ON u1.id = b.user_id_1
+                JOIN users u2 ON u2.id = b.user_id_2
+                WHERE u1.company_id = @cid OR u2.company_id = @cid
+                ORDER BY b.created_at DESC";
+
+            var dt = DBManager.Instance.ExecuteDataTable(sql, new MySqlParameter("@cid", _companyId));
+
+            _lvBans.BeginUpdate();
+            _lvBans.Items.Clear();
+            foreach (DataRow row in dt.Rows)
+            {
+                var item = new ListViewItem(Convert.ToString(row["name1"]))
+                {
+                    Tag = row["id"]
+                };
+                item.SubItems.Add(Convert.ToString(row["name2"]));
+                item.SubItems.Add(Convert.ToDateTime(row["created_at"]).ToString("yyyy-MM-dd HH:mm:ss"));
+                _lvBans.Items.Add(item);
+            }
+            _lvBans.EndUpdate();
+        }
+
+        private void btnBlock_Click(object sender, EventArgs e)
+        {
+            if (_cbUser1.SelectedIndex < 0 || _cbUser2.SelectedIndex < 0)
+            {
+                MessageBox.Show("두 사용자를 선택하세요.");
+                return;
+            }
+
+            int uid1 = Convert.ToInt32(_cbUser1.SelectedValue);
+            int uid2 = Convert.ToInt32(_cbUser2.SelectedValue);
+            if (uid1 == uid2)
+            {
+                MessageBox.Show("같은 사용자끼리는 차단할 수 없습니다.");
+                return;
+            }
+
+            int a = Math.Min(uid1, uid2);
+            int b = Math.Max(uid1, uid2);
+
+            try
+            {
+                DBManager.Instance.ExecuteNonQuery(
+                    "INSERT INTO chat_bans (user_id_1, user_id_2, created_at) VALUES (@u1, @u2, @created)",
+                    new MySqlParameter("@u1", a),
+                    new MySqlParameter("@u2", b),
+                    new MySqlParameter("@created", DateTime.Now));
+
+                LoadBanList();
+            }
+            catch (MySqlException ex)
+            {
+                MessageBox.Show("차단 추가 중 오류: " + ex.Message);
+            }
+        }
+
+        private void btnUnblock_Click(object sender, EventArgs e)
+        {
+            if (_lvBans.SelectedItems.Count == 0)
+            {
+                MessageBox.Show("해제할 항목을 선택하세요.");
+                return;
+            }
+
+            var idObj = _lvBans.SelectedItems[0].Tag;
+            if (idObj == null) return;
+
+            int banId = Convert.ToInt32(idObj);
+            try
+            {
+                DBManager.Instance.ExecuteNonQuery(
+                    "DELETE FROM chat_bans WHERE id=@id",
+                    new MySqlParameter("@id", banId));
+                LoadBanList();
+            }
+            catch (MySqlException ex)
+            {
+                MessageBox.Show("차단 해제 중 오류: " + ex.Message);
             }
         }
     }

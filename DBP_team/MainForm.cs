@@ -236,6 +236,13 @@ namespace DBP_team
                         return;
                     }
 
+                    // ban check
+                    if (ChatBanDAO.IsChatBanned(_userId, otherId))
+                    {
+                        MessageBox.Show("관리자 정책에 의해 대화가 제한된 사용자입니다.");
+                        return;
+                    }
+
                     var chat = new ChatForm(_userId, otherId, otherDisplay);
                     chat.StartPosition = FormStartPosition.CenterParent;
                     chat.Show(this);
@@ -443,6 +450,13 @@ namespace DBP_team
 
             var otherDisplay = MultiProfileService.GetDisplayNameForViewer(otherId, _userId);
             if (string.IsNullOrWhiteSpace(otherDisplay)) otherDisplay = lvi.Text;
+            // ban check
+            if (ChatBanDAO.IsChatBanned(_userId, otherId))
+            {
+                MessageBox.Show("관리자 정책에 의해 대화가 제한된 사용자입니다.");
+                return;
+            }
+
             var chat = new ChatForm(_userId, otherId, otherDisplay);
             chat.StartPosition = FormStartPosition.CenterParent;
             chat.Show(this);
@@ -731,6 +745,13 @@ namespace DBP_team
 
             var displayName = MultiProfileService.GetDisplayNameForViewer(targetUserId, _userId);
             if (string.IsNullOrWhiteSpace(displayName)) displayName = item.Text;
+
+            // ban check
+            if (ChatBanDAO.IsChatBanned(_userId, targetUserId))
+            {
+                MessageBox.Show("관리자 정책에 의해 대화가 제한된 사용자입니다.");
+                return;
+            }
 
             var chat = new ChatForm(_userId, targetUserId, displayName);
             chat.StartPosition = FormStartPosition.CenterParent;
