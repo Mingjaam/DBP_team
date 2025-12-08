@@ -11,7 +11,7 @@ namespace DBP_team.UI
     public class MultiProfileGroupEditForm : Form
     {
         private readonly int _ownerUserId;
-        private readonly string _groupName; // null for 기본 그룹
+        private readonly string _groupName;
         private TextBox _txtGroupName;
         private PictureBox _pic;
         private Button _btnImage;
@@ -23,7 +23,7 @@ namespace DBP_team.UI
         public MultiProfileGroupEditForm(int ownerUserId, string groupName)
         {
             _ownerUserId = ownerUserId;
-            _groupName = groupName; // may be null (기본)
+            _groupName = groupName;
             InitializeComponent();
             LoadTargets();
             LoadExisting();
@@ -32,30 +32,124 @@ namespace DBP_team.UI
         private void InitializeComponent()
         {
             this.Text = _groupName == null ? "그룹 추가" : "그룹 수정";
-            this.Size = new Size(560, 560);
+            this.Size = new Size(600, 620);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
+            this.StartPosition = FormStartPosition.CenterParent;
+            this.BackColor = Color.White;
+            this.Font = new Font("맑은 고딕", 9F);
 
-            var lblName = new Label { Text = "그룹 이름 (빈칸=기본)", Left = 12, Top = 14, Width = 180 };
-            _txtGroupName = new TextBox { Left = 12, Top = 34, Width = 520 };
+            var pnlTop = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 220,
+                BackColor = Color.FromArgb(250, 250, 250),
+                Padding = new Padding(15)
+            };
+
+            var lblName = new Label
+            {
+                Text = "그룹 이름 (비워두면 기본 그룹)",
+                Left = 15,
+                Top = 15,
+                Width = 250,
+                Font = new Font("맑은 고딕", 9F, FontStyle.Bold)
+            };
+
+            _txtGroupName = new TextBox
+            {
+                Left = 15,
+                Top = 40,
+                Width = 550,
+                BorderStyle = BorderStyle.FixedSingle,
+                Font = new Font("맑은 고딕", 10F)
+            };
             if (_groupName != null) _txtGroupName.Text = _groupName;
-            _pic = new PictureBox { Left = 12, Top = 66, Width = 130, Height = 130, BorderStyle = BorderStyle.FixedSingle, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.WhiteSmoke };
-            _btnImage = new Button { Left = 150, Top = 66, Width = 120, Height = 28, Text = "사진 선택" };
+
+            _pic = new PictureBox
+            {
+                Left = 15,
+                Top = 75,
+                Width = 140,
+                Height = 140,
+                BorderStyle = BorderStyle.FixedSingle,
+                SizeMode = PictureBoxSizeMode.Zoom,
+                BackColor = Color.FromArgb(245, 245, 245)
+            };
+
+            _btnImage = new Button
+            {
+                Left = 165,
+                Top = 75,
+                Width = 140,
+                Height = 32,
+                Text = "사진 선택",
+                Font = new Font("맑은 고딕", 9F),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(240, 240, 240),
+                ForeColor = Color.FromArgb(80, 80, 80)
+            };
+            _btnImage.FlatAppearance.BorderSize = 0;
             _btnImage.Click += (s, e) => ChooseImage();
 
-            var lblTargets = new Label { Text = "대상 사용자", Left = 12, Top = 208, Width = 120 };
-            _lstTargets = new CheckedListBox { Left = 12, Top = 228, Width = 520, Height = 240, CheckOnClick = true };
+            pnlTop.Controls.Add(lblName);
+            pnlTop.Controls.Add(_txtGroupName);
+            pnlTop.Controls.Add(_pic);
+            pnlTop.Controls.Add(_btnImage);
 
-            _btnSave = new Button { Text = "저장", Left = 372, Top = 480, Width = 80 };
-            _btnCancel = new Button { Text = "취소", Left = 460, Top = 480, Width = 80 };
+            var lblTargets = new Label
+            {
+                Text = "대상 사용자",
+                Left = 15,
+                Top = 235,
+                Width = 120,
+                Font = new Font("맑은 고딕", 9F, FontStyle.Bold)
+            };
+
+            _lstTargets = new CheckedListBox
+            {
+                Left = 15,
+                Top = 260,
+                Width = 560,
+                Height = 260,
+                CheckOnClick = true,
+                BorderStyle = BorderStyle.FixedSingle,
+                Font = new Font("맑은 고딕", 9F)
+            };
+
+            _btnSave = new Button
+            {
+                Text = "저장",
+                Left = 390,
+                Top = 535,
+                Width = 90,
+                Height = 35,
+                Font = new Font("맑은 고딕", 9F, FontStyle.Bold),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(74, 144, 226),
+                ForeColor = Color.White
+            };
+            _btnSave.FlatAppearance.BorderSize = 0;
+
+            _btnCancel = new Button
+            {
+                Text = "취소",
+                Left = 490,
+                Top = 535,
+                Width = 90,
+                Height = 35,
+                Font = new Font("맑은 고딕", 9F),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(240, 240, 240),
+                ForeColor = Color.FromArgb(80, 80, 80)
+            };
+            _btnCancel.FlatAppearance.BorderSize = 0;
+
             _btnSave.Click += (s, e) => SaveGroup();
             _btnCancel.Click += (s, e) => this.DialogResult = DialogResult.Cancel;
 
-            this.Controls.Add(lblName);
-            this.Controls.Add(_txtGroupName);
-            this.Controls.Add(_pic);
-            this.Controls.Add(_btnImage);
+            this.Controls.Add(pnlTop);
             this.Controls.Add(lblTargets);
             this.Controls.Add(_lstTargets);
             this.Controls.Add(_btnSave);
@@ -138,7 +232,7 @@ namespace DBP_team.UI
                     var ti = obj as TargetItem; if (ti != null) selected.Add(ti.Id);
                 }
                 var gName = _txtGroupName.Text?.Trim();
-                if (string.IsNullOrEmpty(gName)) gName = "(기본)"; // 기본 그룹
+                if (string.IsNullOrEmpty(gName)) gName = "(기본)";
                 MultiProfileService.SaveGroup(_ownerUserId, gName, _photoBytes, selected);
                 MessageBox.Show("저장되었습니다.");
                 this.DialogResult = DialogResult.OK;

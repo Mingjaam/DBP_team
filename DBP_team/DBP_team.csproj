@@ -104,9 +104,13 @@
     <Compile Include="AdminForm.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="AdminForm.Designer.cs">
+      <DependentUpon>AdminForm.cs</DependentUpon>
+    </Compile>
     <Compile Include="AdminGuard.cs" />
     <Compile Include="AppSession.cs" />
     <Compile Include="AuthService.cs" />
+    <Compile Include="ChatBanDAO.cs" />
     <Compile Include="ChatForm.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -134,6 +138,7 @@
       <DependentUpon>MainForm.cs</DependentUpon>
     </Compile>
     <Compile Include="Models\ChatMessage.cs" />
+    <Compile Include="Models\EmployeePermissionService.cs" />
     <Compile Include="Models\User.cs" />
     <Compile Include="MultiProfileService.cs" />
     <Compile Include="ProfileForm.cs">
@@ -150,6 +155,10 @@
     </Compile>
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="UI\IconHelper.cs" />
+    <Compile Include="UI\InputDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="UI\MultiProfileEditForm.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -159,6 +168,15 @@
     <Compile Include="UI\MultiProfilesForm.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="UI\TeamAddDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <EmbeddedResource Include="AddressSearchForm.resx">
+      <DependentUpon>AddressSearchForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="AdminForm.resx">
+      <DependentUpon>AdminForm.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="ChatForm.resx">
       <DependentUpon>ChatForm.cs</DependentUpon>
     </EmbeddedResource>
@@ -185,6 +203,7 @@
     <Compile Include="Properties\Resources.Designer.cs">
       <AutoGen>True</AutoGen>
       <DependentUpon>Resources.resx</DependentUpon>
+      <DesignTime>True</DesignTime>
     </Compile>
     <None Include="packages.config" />
     <None Include="Properties\Settings.settings">
@@ -199,6 +218,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Properties\DBP.ico" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

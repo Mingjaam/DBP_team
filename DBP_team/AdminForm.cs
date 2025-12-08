@@ -1,176 +1,120 @@
 using System;
-using System.Data;
-using System.Drawing;
+using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Forms;
 using MySql.Data.MySqlClient;
-using DBP_team.Models;
-using System.Text;
+using System.Data;
+using System.ComponentModel; // for LicenseManager, LicenseUsageMode
+using System.Text; // for StringBuilder
+using DBP_team.Models; // for User
+using DBP_team.UI; // for InputDialog, TeamAddDialog
 
 namespace DBP_team
 {
     public partial class AdminForm : Form
     {
-        // --- ÇÊµå ¼±¾ğ ---
         private readonly User _me;
         private readonly int _companyId;
+        private int? _selectedPermissionUserId = null;
+        private bool _tvUpdating = false; // prevent recursive AfterCheck loops
 
-        private TabControl _tabs, mainTabControl;
-
-        // Dept
-        private TextBox _txtDeptName, _txtDeptSearch;
-        private Button _btnDeptAdd, _btnDeptUpdate, _btnDeptSearch; // removed seed button
-        private DataGridView _gridDept;
-
-        // User-Dept
-        private TextBox _txtUserSearch;
-        private ComboBox _cboDeptForUser;
-        private Button _btnUserSearch, _btnApplyDept;
-        private DataGridView _gridUsers;
-
-        // Chat search
-        private DateTimePicker _dtFrom, _dtTo;
-        private TextBox _txtKeyword;
-        private ComboBox _cboUserFilter;
-        private Button _btnChatSearch;
-        private DataGridView _gridChat;
-
-        // Á¢¼Ó ÀÌ·Â ÅÇ¿ë ÄÁÆ®·Ñ ÇÊµå
-        private DateTimePicker dtpStart;
-        private DateTimePicker dtpEnd;
-        private TextBox txtSearchUser;
-        private Button btnSearchLog;
-        private DataGridView _gridLogs; // ListView¸¦ DataGridView·Î º¯°æ
+        public AdminForm() : this(new User { Id = 0, CompanyId = 0, FullName = "ê´€ë¦¬ì" }) { }
 
         public AdminForm(User me)
         {
-            _me = me ?? throw new ArgumentNullException(nameof(me));
-            _companyId = me.CompanyId ?? 0;
+            UI.IconHelper.ApplyAppIcon(this);
+            _me = me ?? new User { Id = 0, CompanyId = 0, FullName = "ê´€ë¦¬ì" };
+            _companyId = _me.CompanyId ?? 0;
 
-            if (!AdminGuard.IsAdmin(me))
+            InitializeComponent();
+
+            bool isDesignTime = LicenseManager.UsageMode == LicenseUsageMode.Designtime;
+            if (!isDesignTime)
             {
-                MessageBox.Show("°ü¸®ÀÚ ±ÇÇÑÀÌ ¾ø½À´Ï´Ù.", "±ÇÇÑ ¿À·ù", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                Close();
-                return;
+                if (!AdminGuard.IsAdmin(_me))
+                {
+                    MessageBox.Show("ê´€ë¦¬ìë§Œ ì ‘ê·¼ ê°€ëŠ¥í•©ë‹ˆë‹¤.", "ê¶Œí•œ ì—†ìŒ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    this.Load += (s, e) => this.Close();
+                    return;
+                }
+                this.Load -= AdminForm_Load;
+                this.Load += AdminForm_Load;
             }
-
-            Text = "°ü¸®ÀÚ ÄÜ¼Ö";
-            Width = 1024;
-            Height = 720;
-            StartPosition = FormStartPosition.CenterScreen;
-
-            BuildUi();
-            LoadDeptGrid();
-            LoadDeptComboForUser();
-            LoadUsersGrid();
-            LoadUserFilterCombo();
         }
 
-        private void BuildUi()
+        private void AdminForm_Load(object sender, EventArgs e)
         {
-            _tabs = new TabControl { Dock = DockStyle.Fill };
+            if (LicenseManager.UsageMode != LicenseUsageMode.Designtime)
+            {
+                if (_dtFrom != null) _dtFrom.Value = DateTime.Now.Date.AddDays(-7);
+                if (_dtTo != null) _dtTo.Value = DateTime.Now.Date.AddDays(1).AddSeconds(-1);
 
-            // Tab 1: ºÎ¼­°ü¸®
-            var pageDept = new TabPage("ºÎ¼­°ü¸®");
-            var pnlDeptTop = new Panel { Dock = DockStyle.Top, Height = 60, Padding = new Padding(8) };
+                try
+                {
+                    EnsureUserViewPermissionTableExists();
 
-            var lblDeptName = new Label { Text = "ºÎ¼­¸í", AutoSize = true, Top = 12, Left = 8 };
-            _txtDeptName = new TextBox { Width = 220, Left = 60, Top = 8 };
-            _btnDeptAdd = new Button { Text = "µî·Ï", Left = 290, Top = 7, Width = 80 };
-            _btnDeptUpdate = new Button { Text = "º¯°æ", Left = 375, Top = 7, Width = 80 };
-
-            var lblDeptSearch = new Label { Text = "°Ë»ö(ºÎ¼­¸í)", AutoSize = true, Top = 12, Left = 470 };
-            _txtDeptSearch = new TextBox { Left = 560, Top = 8, Width = 220 };
-            _btnDeptSearch = new Button { Text = "°Ë»ö", Left = 785, Top = 7, Width = 80 };
-
-            _btnDeptAdd.Click += (s, e) => AddDepartment();
-            _btnDeptUpdate.Click += (s, e) => UpdateDepartment();
-            _btnDeptSearch.Click += (s, e) => LoadDeptGrid(_txtDeptSearch.Text?.Trim());
-
-            pnlDeptTop.Controls.Add(lblDeptName);
-            pnlDeptTop.Controls.Add(_txtDeptName);
-            pnlDeptTop.Controls.Add(_btnDeptAdd);
-            pnlDeptTop.Controls.Add(_btnDeptUpdate);
-            pnlDeptTop.Controls.Add(lblDeptSearch);
-            pnlDeptTop.Controls.Add(_txtDeptSearch);
-            pnlDeptTop.Controls.Add(_btnDeptSearch);
-
-            _gridDept = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, SelectionMode = DataGridViewSelectionMode.FullRowSelect, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill };
-            _gridDept.MultiSelect = false;
-            _gridDept.CellClick += (s, e) => { if (e.RowIndex >= 0) _txtDeptName.Text = Convert.ToString(_gridDept.Rows[e.RowIndex].Cells["name"].Value); };
-            pageDept.Controls.Add(_gridDept);
-            pageDept.Controls.Add(pnlDeptTop);
-
-            // Tab 2: »ç¿ëÀÚ ¼Ò¼Ó º¯°æ
-            var pageUserDept = new TabPage("»ç¿ëÀÚ ¼Ò¼Ó º¯°æ");
-            var pnlUserTop = new Panel { Dock = DockStyle.Top, Height = 60, Padding = new Padding(8) };
-
-            var lblUserSearch = new Label { Text = "»ç¿ëÀÚ °Ë»ö", AutoSize = true, Top = 12, Left = 8 };
-            _txtUserSearch = new TextBox { Width = 240, Left = 80, Top = 8 };
-            _btnUserSearch = new Button { Text = "°Ë»ö", Left = 325, Top = 7, Width = 80 };
-            _btnUserSearch.Click += (s, e) => LoadUsersGrid(_txtUserSearch.Text?.Trim());
-
-            var lblDeptSelect = new Label { Text = "ºÎ¼­ ¼±ÅÃ", AutoSize = true, Top = 12, Left = 420 };
-            _cboDeptForUser = new ComboBox { Left = 480, Top = 8, Width = 240, DropDownStyle = ComboBoxStyle.DropDownList };
-            _btnApplyDept = new Button { Text = "¼±ÅÃ »ç¿ëÀÚ ¼Ò¼Ó º¯°æ", Left = 725, Top = 7, Width = 180 };
-            _btnApplyDept.Click += (s, e) => ApplyUserDepartment();
-
-            pnlUserTop.Controls.Add(lblUserSearch);
-            pnlUserTop.Controls.Add(_txtUserSearch);
-            pnlUserTop.Controls.Add(_btnUserSearch);
-            pnlUserTop.Controls.Add(lblDeptSelect);
-            pnlUserTop.Controls.Add(_cboDeptForUser);
-            pnlUserTop.Controls.Add(_btnApplyDept);
-
-            _gridUsers = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, SelectionMode = DataGridViewSelectionMode.FullRowSelect, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill };
-            _gridUsers.MultiSelect = true;
-            pageUserDept.Controls.Add(_gridUsers);
-            pageUserDept.Controls.Add(pnlUserTop);
-
-            // Tab 3: ´ëÈ­ °Ë»ö
-            var pageChat = new TabPage("´ëÈ­ °Ë»ö");
-            var pnlChatTop = new Panel { Dock = DockStyle.Top, Height = 70, Padding = new Padding(8) };
-
-            var lblFrom = new Label { Text = "½ÃÀÛÀÏ", AutoSize = true, Top = 12, Left = 8 };
-            _dtFrom = new DateTimePicker { Width = 140, Left = 60, Top = 8, Value = DateTime.Now.Date.AddDays(-7) };
-
-            var lblTo = new Label { Text = "Á¾·áÀÏ", AutoSize = true, Top = 12, Left = 210 };
-            _dtTo = new DateTimePicker { Left = 260, Top = 8, Width = 140, Value = DateTime.Now.Date.AddDays(1).AddSeconds(-1) };
-
-            var lblKeyword = new Label { Text = "Å°¿öµå", AutoSize = true, Top = 12, Left = 410 };
-            _txtKeyword = new TextBox { Left = 455, Top = 8, Width = 220 };
-
-            var lblUser = new Label { Text = "»ç¿ëÀÚ", AutoSize = true, Top = 12, Left = 685 };
-            _cboUserFilter = new ComboBox { Left = 730, Top = 8, Width = 200, DropDownStyle = ComboBoxStyle.DropDownList };
-
-            _btnChatSearch = new Button { Text = "°Ë»ö", Left = 940, Top = 7, Width = 60 };
-            _btnChatSearch.Click += (s, e) => LoadChatGrid();
-
-            pnlChatTop.Controls.Add(lblFrom);
-            pnlChatTop.Controls.Add(_dtFrom);
-            pnlChatTop.Controls.Add(lblTo);
-            pnlChatTop.Controls.Add(_dtTo);
-            pnlChatTop.Controls.Add(lblKeyword);
-            pnlChatTop.Controls.Add(_txtKeyword);
-            pnlChatTop.Controls.Add(lblUser);
-            pnlChatTop.Controls.Add(_cboUserFilter);
-            pnlChatTop.Controls.Add(_btnChatSearch);
-
-            _gridChat = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, SelectionMode = DataGridViewSelectionMode.FullRowSelect, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill };
-            pageChat.Controls.Add(_gridChat);
-            pageChat.Controls.Add(pnlChatTop);
-
-            // --- "Á¢¼Ó ÀÌ·Â" ÅÇ Ãß°¡ ---
-            var pageAccessLogs = CreateAccessLogsTab(); // Á¢¼Ó ÀÌ·Â ÅÇ »ı¼º
-
-            _tabs.TabPages.Add(pageDept);
-            _tabs.TabPages.Add(pageUserDept);
-            _tabs.TabPages.Add(pageChat);
-            _tabs.TabPages.Add(pageAccessLogs); // »ı¼ºµÈ ÅÇÀ» TabControl¿¡ Ãß°¡
-            Controls.Add(_tabs);
+                    LoadDeptGrid();
+                    LoadDeptComboForUser();
+                    LoadUsersGrid();
+                    LoadUserFilterCombo();
+                    SearchAccessLogs();
+                    InitializePermissionTree();
+                    InitializeChatBanUI();
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("ì´ˆê¸°í™” ì¤‘ ì˜¤ë¥˜: " + ex.Message, "ì˜¤ë¥˜", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
         }
 
-        // ºÎ¼­ ¸ñ·Ï ·Îµå - hide IDs from view
+        private void EnsureUserViewPermissionTableExists()
+        {
+            try
+            {
+                DBManager.Instance.ExecuteNonQuery(
+                    "CREATE TABLE IF NOT EXISTS user_view_permission (" +
+                    " id INT AUTO_INCREMENT PRIMARY KEY, " +
+                    " viewer_user_id INT NOT NULL, " +
+                    " dept_id INT NULL, " +
+                    " group_code VARCHAR(50) NULL, " +
+                    " created_at DATETIME DEFAULT CURRENT_TIMESTAMP, " +
+                    " INDEX idx_viewer(viewer_user_id) " +
+                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+                try
+                {
+                    DBManager.Instance.ExecuteNonQuery(
+                        "ALTER TABLE user_view_permission ADD UNIQUE KEY uq_viewer_target (viewer_user_id, dept_id, group_code)");
+                }
+                catch { }
+
+                try
+                {
+                    DBManager.Instance.ExecuteNonQuery(
+                        "ALTER TABLE user_view_permission MODIFY COLUMN group_code VARCHAR(100) NULL");
+                }
+                catch { }
+            }
+            catch
+            {
+            }
+        }
+
+        private void DeptAdd_Click(object sender, EventArgs e) => AddDepartment();
+        private void DeptUpdate_Click(object sender, EventArgs e) => UpdateDepartment();
+        private void DeptSearch_Click(object sender, EventArgs e) => LoadDeptGrid(_txtDeptSearch.Text?.Trim());
+        private void DeptGrid_CellClick(object sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex >= 0) _txtDeptName.Text = Convert.ToString(_gridDept.Rows[e.RowIndex].Cells["name"].Value);
+        }
+        private void UserSearch_Click(object sender, EventArgs e) => LoadUsersGrid(_txtUserSearch.Text?.Trim());
+        private void ApplyDept_Click(object sender, EventArgs e) => ApplyUserDepartment();
+        private void ChatSearch_Click(object sender, EventArgs e) => LoadChatGrid();
+        private void SearchLog_Click(object sender, EventArgs e) => SearchAccessLogs();
+        private void GridChat_CellClick(object sender, DataGridViewCellEventArgs e) { }
+        private void GridLogs_CellClick(object sender, DataGridViewCellEventArgs e) { }
+
         private void LoadDeptGrid(string keyword = null)
         {
             var sql = "SELECT id, name FROM departments WHERE company_id = @cid " +
@@ -182,26 +126,40 @@ namespace DBP_team
             var dt = DBManager.Instance.ExecuteDataTable(sql, pars);
             _gridDept.DataSource = dt;
             if (_gridDept.Columns.Contains("id")) _gridDept.Columns["id"].Visible = false;
-            if (_gridDept.Columns.Contains("name")) _gridDept.Columns["name"].HeaderText = "ºÎ¼­¸í";
+            if (_gridDept.Columns.Contains("name")) _gridDept.Columns["name"].HeaderText = "ë¶€ì„œëª…";
         }
 
         private void AddDepartment()
         {
-            var name = _txtDeptName.Text?.Trim();
-            if (string.IsNullOrWhiteSpace(name)) { MessageBox.Show("ºÎ¼­¸íÀ» ÀÔ·ÂÇÏ¼¼¿ä."); return; }
-            DBManager.Instance.ExecuteNonQuery(
-                "INSERT INTO departments (company_id, name) VALUES (@cid, @name)",
-                new MySqlParameter("@cid", _companyId), new MySqlParameter("@name", name));
-            LoadDeptGrid();
-            LoadDeptComboForUser();
+            try
+            {
+                using (var dlg = new InputDialog("ë¶€ì„œ ì¶”ê°€", string.Empty))
+                {
+                    if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                    var name = dlg.ResultText?.Trim();
+                    if (string.IsNullOrWhiteSpace(name)) { MessageBox.Show("ë¶€ì„œëª…ì„ ì…ë ¥í•˜ì„¸ìš”."); return; }
+                    DBManager.Instance.ExecuteNonQuery(
+                        "INSERT INTO departments (company_id, name) VALUES (@cid, @name)",
+                        new MySqlParameter("@cid", _companyId), new MySqlParameter("@name", name));
+                    LoadDeptGrid();
+                    LoadDeptComboForUser();
+                    InitializePermissionTree();
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("ë¶€ì„œ ì¶”ê°€ ì¤‘ ì˜¤ë¥˜: " + ex.Message, "ì˜¤ë¥˜", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void UpdateDepartment()
         {
-            if (_gridDept.CurrentRow == null) { MessageBox.Show("ÇàÀ» ¼±ÅÃÇÏ¼¼¿ä."); return; }
-            var id = Convert.ToInt32((_gridDept.CurrentRow.DataBoundItem as DataRowView)["id"]);
+            if (_gridDept.CurrentRow == null) { MessageBox.Show("ìˆ˜ì •í•  ë¶€ì„œë¥¼ ì„ íƒí•˜ì„¸ìš”."); return; }
+            var drv = _gridDept.CurrentRow.DataBoundItem as DataRowView;
+            if (drv == null) { MessageBox.Show("ì„ íƒ í–‰ ë°ì´í„°ë¥¼ ì½ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤."); return; }
+            var id = Convert.ToInt32(drv["id"]);
             var name = _txtDeptName.Text?.Trim();
-            if (string.IsNullOrWhiteSpace(name)) { MessageBox.Show("ºÎ¼­¸íÀ» ÀÔ·ÂÇÏ¼¼¿ä."); return; }
+            if (string.IsNullOrWhiteSpace(name)) { MessageBox.Show("ë¶€ì„œëª…ì„ ì…ë ¥í•˜ì„¸ìš”."); return; }
             DBManager.Instance.ExecuteNonQuery(
                 "UPDATE departments SET name = @name WHERE id = @id AND company_id = @cid",
                 new MySqlParameter("@name", name), new MySqlParameter("@id", id), new MySqlParameter("@cid", _companyId));
@@ -219,28 +177,64 @@ namespace DBP_team
             _cboDeptForUser.ValueMember = "id";
         }
 
-        // »ç¿ëÀÚ ¸ñ·Ï - show department name; hide ids
         private void LoadUsersGrid(string keyword = null)
         {
-            var sql = "SELECT u.id, COALESCE(u.full_name,u.email) AS name, u.email, u.department_id, d.name AS department " +
-                      "FROM users u LEFT JOIN departments d ON d.id = u.department_id " +
-                      "WHERE u.company_id=@cid";
-            var pars = new System.Collections.Generic.List<MySqlParameter> { new MySqlParameter("@cid", _companyId) };
-            if (!string.IsNullOrWhiteSpace(keyword)) { sql += " AND (u.full_name LIKE @kw OR u.email LIKE @kw)"; pars.Add(new MySqlParameter("@kw", "%" + keyword + "%")); }
-            sql += " ORDER BY name";
-            var dt = DBManager.Instance.ExecuteDataTable(sql, pars.ToArray());
+            DataTable dt;
+
+            if (AdminGuard.IsAdmin(_me))
+            {
+                var sql = "SELECT u.id, COALESCE(u.full_name, u.email) AS name, u.email, " +
+                          "u.department_id, d.name AS department " +
+                          "FROM users u " +
+                          "LEFT JOIN departments d ON d.id = u.department_id " +
+                          "WHERE u.company_id = @cid";
+
+                var pars = new System.Collections.Generic.List<MySqlParameter>
+        {
+            new MySqlParameter("@cid", _companyId)
+        };
+
+                if (!string.IsNullOrWhiteSpace(keyword))
+                {
+                    sql += " AND (u.full_name LIKE @kw OR u.email LIKE @kw)";
+                    pars.Add(new MySqlParameter("@kw", "%" + keyword + "%"));
+                }
+
+                sql += " ORDER BY name";
+
+                dt = DBManager.Instance.ExecuteDataTable(sql, pars.ToArray());
+            }
+            else
+            {
+                dt = Models.EmployeePermissionService.LoadVisibleEmployees(
+                    viewerId: _me.Id,
+                    companyId: _companyId,
+                    keyword: keyword
+                );
+            }
+
             _gridUsers.DataSource = dt;
-            if (_gridUsers.Columns.Contains("id")) _gridUsers.Columns["id"].Visible = false;
-            if (_gridUsers.Columns.Contains("department_id")) _gridUsers.Columns["department_id"].Visible = false;
-            if (_gridUsers.Columns.Contains("name")) _gridUsers.Columns["name"].HeaderText = "ÀÌ¸§";
-            if (_gridUsers.Columns.Contains("email")) _gridUsers.Columns["email"].HeaderText = "ÀÌ¸ŞÀÏ";
-            if (_gridUsers.Columns.Contains("department")) _gridUsers.Columns["department"].HeaderText = "ºÎ¼­";
+
+            if (_gridUsers.Columns.Contains("id"))
+                _gridUsers.Columns["id"].Visible = false;
+
+            if (_gridUsers.Columns.Contains("department_id"))
+                _gridUsers.Columns["department_id"].Visible = false;
+
+            if (_gridUsers.Columns.Contains("name"))
+                _gridUsers.Columns["name"].HeaderText = "ì´ë¦„";
+
+            if (_gridUsers.Columns.Contains("email"))
+                _gridUsers.Columns["email"].HeaderText = "ì´ë©”ì¼";
+
+            if (_gridUsers.Columns.Contains("department"))
+                _gridUsers.Columns["department"].HeaderText = "ë¶€ì„œ";
         }
 
         private void ApplyUserDepartment()
         {
-            if (_gridUsers.SelectedRows.Count == 0) { MessageBox.Show("»ç¿ëÀÚ¸¦ ¼±ÅÃÇÏ¼¼¿ä."); return; }
-            if (!int.TryParse(Convert.ToString(_cboDeptForUser.SelectedValue), out int deptId)) { MessageBox.Show("ºÎ¼­¸¦ ¼±ÅÃÇÏ¼¼¿ä."); return; }
+            if (_gridUsers.SelectedRows.Count == 0) { MessageBox.Show("ì‚¬ìš©ìë¥¼ ì„ íƒí•˜ì„¸ìš”."); return; }
+            if (!int.TryParse(Convert.ToString(_cboDeptForUser.SelectedValue), out int deptId)) { MessageBox.Show("ë¶€ì„œë¥¼ ì„ íƒí•˜ì„¸ìš”."); return; }
 
             foreach (DataGridViewRow row in _gridUsers.SelectedRows)
             {
@@ -266,7 +260,6 @@ namespace DBP_team
             _cboUserFilter.SelectedIndex = -1;
         }
 
-        // Ã¤ÆÃ °Ë»ö - show names only
         private void LoadChatGrid()
         {
             var from = _dtFrom.Value;
@@ -290,71 +283,16 @@ namespace DBP_team
 
             var dt = DBManager.Instance.ExecuteDataTable(sql.ToString(), pars.ToArray());
             _gridChat.DataSource = dt;
-            if (_gridChat.Columns.Contains("sender")) _gridChat.Columns["sender"].HeaderText = "º¸³½»ç¶÷";
-            if (_gridChat.Columns.Contains("receiver")) _gridChat.Columns["receiver"].HeaderText = "¹Ş´Â»ç¶÷";
-            if (_gridChat.Columns.Contains("message")) _gridChat.Columns["message"].HeaderText = "³»¿ë";
-            if (_gridChat.Columns.Contains("created_at")) _gridChat.Columns["created_at"].HeaderText = "½Ã°£";
-        }
-
-        private TabPage CreateAccessLogsTab()
-        {
-            var tabPage = new TabPage("Á¢¼Ó ÀÌ·Â");
-
-            // °Ë»ö ÆĞ³Î (±âÁ¸°ú µ¿ÀÏ)
-            var pnlSearch = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Top,
-                AutoSize = true,
-                Padding = new Padding(8),
-                WrapContents = false
-            };
-            var lblDate = new Label { Text = "±â°£:", Anchor = AnchorStyles.Left, AutoSize = true, Margin = new Padding(3, 6, 0, 3) };
-            dtpStart = new DateTimePicker { Format = DateTimePickerFormat.Short, Width = 100, Margin = new Padding(3) };
-            var lblDateSeparator = new Label { Text = "~", Anchor = AnchorStyles.Left, AutoSize = true, Margin = new Padding(3, 6, 0, 3) };
-            dtpEnd = new DateTimePicker { Format = DateTimePickerFormat.Short, Width = 100, Margin = new Padding(3) };
-            var lblUser = new Label { Text = "»ç¿ëÀÚ:", Anchor = AnchorStyles.Left, AutoSize = true, Margin = new Padding(15, 6, 0, 3) };
-            txtSearchUser = new TextBox { Width = 150, Margin = new Padding(3) };
-            btnSearchLog = new Button { Text = "°Ë»ö", Width = 80, Margin = new Padding(10, 0, 3, 0) };
-            btnSearchLog.Click += (s, e) => SearchAccessLogs();
-            pnlSearch.Controls.AddRange(new Control[] { lblDate, dtpStart, lblDateSeparator, dtpEnd, lblUser, txtSearchUser, btnSearchLog });
-
-            // --- ·Î±× Ç¥½Ã ÄÁÆ®·ÑÀ» DataGridView·Î º¯°æ ---
-            _gridLogs = new DataGridView
-            {
-                Dock = DockStyle.Fill,
-                ReadOnly = true,
-                AllowUserToAddRows = false,
-                SelectionMode = DataGridViewSelectionMode.FullRowSelect,
-                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill
-            };
-
-            tabPage.Controls.Add(_gridLogs); // ListView ´ë½Å DataGridView Ãß°¡
-            tabPage.Controls.Add(pnlSearch);
-
-            // --- ÃÊ±â µ¥ÀÌÅÍ ·Îµå ÀÌº¥Æ® (±âÁ¸°ú µ¿ÀÏ) ---
-            this.Shown += (s, e) =>
-            {
-                if (_gridLogs != null && !this.IsDisposed && _tabs.SelectedTab == tabPage)
-                {
-                    SearchAccessLogs();
-                }
-            };
-            _tabs.SelectedIndexChanged += (s, e) =>
-            {
-                if (_tabs.SelectedTab == tabPage)
-                {
-                    SearchAccessLogs();
-                }
-            };
-
-            return tabPage;
+            if (_gridChat.Columns.Contains("sender")) _gridChat.Columns["sender"].HeaderText = "ë³´ë‚¸ì‚¬ëŒ";
+            if (_gridChat.Columns.Contains("receiver")) _gridChat.Columns["receiver"].HeaderText = "ë°›ëŠ”ì‚¬ëŒ";
+            if (_gridChat.Columns.Contains("message")) _gridChat.Columns["message"].HeaderText = "ë‚´ìš©";
+            if (_gridChat.Columns.Contains("created_at")) _gridChat.Columns["created_at"].HeaderText = "ì‹œê°„";
         }
 
         private void SearchAccessLogs()
         {
-            if (_gridLogs == null) return; // ÄÁÆ®·ÑÀÌ »ı¼ºµÇÁö ¾Ê¾ÒÀ¸¸é Á¾·á
+            if (_gridLogs == null) return;
 
-            // DAO ¿ªÇÒÀ» ÇÏ´Â °Ë»ö ·ÎÁ÷
             DataTable GetAccessLogs(DateTime start, DateTime end, string keyword)
             {
                 string sql = @"
@@ -389,28 +327,426 @@ namespace DBP_team
                 string searchKeyword = txtSearchUser.Text.Trim();
 
                 var dt = GetAccessLogs(startDate, endDate, searchKeyword);
-                
-                // --- µ¥ÀÌÅÍ ¹ÙÀÎµù ¹æ½ÄÀ» DataGridView¿¡ ¸Â°Ô ¼öÁ¤ ---
+
                 _gridLogs.DataSource = dt;
 
-                // ÄÃ·³ Çì´õ ÅØ½ºÆ® ¹× ¼û±è Ã³¸®
                 if (_gridLogs.Columns.Contains("created_at"))
                 {
-                    _gridLogs.Columns["created_at"].HeaderText = "½Ã°£";
+                    _gridLogs.Columns["created_at"].HeaderText = "ì‹œê°„";
                     _gridLogs.Columns["created_at"].DefaultCellStyle.Format = "yyyy-MM-dd HH:mm:ss";
                 }
-                if (_gridLogs.Columns.Contains("full_name")) _gridLogs.Columns["full_name"].HeaderText = "»ç¿ëÀÚ¸í";
-                if (_gridLogs.Columns.Contains("activity_type")) _gridLogs.Columns["activity_type"].HeaderText = "È°µ¿";
-                if (_gridLogs.Columns.Contains("user_id")) _gridLogs.Columns["user_id"].HeaderText = "»ç¿ëÀÚ ID";
-                
-                // email ÄÃ·³Àº °á°ú¿¡ Ç¥½ÃÇÏÁö ¾ÊÀ½ (»ç¿ëÀÚ¸íÀ¸·Î ÃæºĞ)
+                if (_gridLogs.Columns.Contains("full_name")) _gridLogs.Columns["full_name"].HeaderText = "ì‚¬ìš©ìëª…";
+                if (_gridLogs.Columns.Contains("activity_type")) _gridLogs.Columns["activity_type"].HeaderText = "í™œë™";
+                if (_gridLogs.Columns.Contains("user_id")) _gridLogs.Columns["user_id"].HeaderText = "ì‚¬ìš©ì ID";
+
                 if (_gridLogs.Columns.Contains("email")) _gridLogs.Columns["email"].Visible = false;
             }
             catch (Exception ex)
             {
-                MessageBox.Show("·Î±× °Ë»ö Áß ¿À·ù ¹ß»ı: " + ex.Message, "¿À·ù", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("ë¡œê·¸ ê²€ìƒ‰ ì¤‘ ì˜¤ë¥˜ ë°œìƒ: " + ex.Message, "ì˜¤ë¥˜", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void TeamAdd_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                using (var dlg = new TeamAddDialog(_companyId))
+                {
+                    if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                    int deptId = dlg.SelectedDepartmentId;
+                    var teamName = dlg.TeamName?.Trim();
+                    if (deptId <= 0 || string.IsNullOrWhiteSpace(teamName))
+                    {
+                        MessageBox.Show("ë¶€ì„œì™€ íŒ€ ì´ë¦„ì„ ì…ë ¥í•˜ì„¸ìš”.");
+                        return;
+                    }
+
+                    DBManager.Instance.ExecuteNonQuery(
+                        "INSERT INTO teams (department_id, name) VALUES (@did, @name)",
+                        new MySqlParameter("@did", deptId),
+                        new MySqlParameter("@name", teamName));
+
+                    LoadDeptGrid();
+                    LoadUsersGrid(_txtUserSearch.Text?.Trim());
+                    InitializePermissionTree();
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("íŒ€ ì¶”ê°€ ì¤‘ ì˜¤ë¥˜: " + ex.Message, "ì˜¤ë¥˜", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void InitializePermissionTree()
+        {
+            try
+            {
+                // ì‚¬ìš©ì ëª©ë¡: team_id í¬í•¨
+                var usersDt = DBManager.Instance.ExecuteDataTable(
+                    "SELECT id, COALESCE(full_name, email) AS name, department_id, team_id FROM users WHERE company_id=@cid ORDER BY name",
+                    new MySqlParameter("@cid", _companyId));
+
+                _cboViewer.DataSource = usersDt.Copy();
+                _cboViewer.DisplayMember = "name";
+                _cboViewer.ValueMember = "id";
+                _cboViewer.SelectedIndex = -1;
+
+                // ë¶€ì„œ/íŒ€ ë¡œë“œ
+                var deptDt = DBManager.Instance.ExecuteDataTable(
+                    "SELECT id, name FROM departments WHERE company_id=@cid ORDER BY name",
+                    new MySqlParameter("@cid", _companyId));
+
+                var teamDt = DBManager.Instance.ExecuteDataTable(
+                    "SELECT t.id, t.name, t.department_id FROM teams t JOIN departments d ON d.id=t.department_id WHERE d.company_id=@cid ORDER BY t.name",
+                    new MySqlParameter("@cid", _companyId));
+
+                var teamsByDept = teamDt?.AsEnumerable()
+                    .GroupBy(r => r.Field<int>("department_id"))
+                    .ToDictionary(g => g.Key, g => g.ToList())
+                    ?? new Dictionary<int, List<DataRow>>();
+
+                // Use Tuple<int,int> as key to avoid anonymous type mismatches
+                var usersByDeptTeam = usersDt?.AsEnumerable()
+                    .GroupBy(r => Tuple.Create(r.Field<int?>("department_id") ?? 0, r.Field<int?>("team_id") ?? 0))
+                    .ToDictionary(g => g.Key, g => g.ToList())
+                    ?? new Dictionary<Tuple<int, int>, List<DataRow>>();
+
+                _tvVisibility.BeginUpdate();
+                _tvVisibility.Nodes.Clear();
+
+                // (ë¶€ì„œ ì—†ìŒ) ë£¨íŠ¸ì— (íŒ€ ì—†ìŒ) ë…¸ë“œ + ì§ì›
+                var rootNoDept = new TreeNode("(ë¶€ì„œ ì—†ìŒ)") { Tag = new PermissionTag { DeptId = 0 } };
+                var noDeptNoTeamKey = Tuple.Create(0, 0);
+                if (usersByDeptTeam.TryGetValue(noDeptNoTeamKey, out var usersNoDept))
+                {
+                    var teamNoneNode = new TreeNode("(íŒ€ ì—†ìŒ)") { Tag = new PermissionTag { DeptId = 0, TeamId = 0 } };
+                    foreach (var ur in usersNoDept)
+                    {
+                        var uid = Convert.ToInt32(ur["id"]);
+                        var uname = Convert.ToString(ur["name"]);
+                        var userNode = new TreeNode(uname) { Tag = new PermissionTag { DeptId = 0, TeamId = 0, UserId = uid } };
+                        teamNoneNode.Nodes.Add(userNode);
+                    }
+                    rootNoDept.Nodes.Add(teamNoneNode);
+                }
+                _tvVisibility.Nodes.Add(rootNoDept);
+
+                // ê° ë¶€ì„œ
+                if (deptDt != null)
+                {
+                    foreach (DataRow d in deptDt.Rows)
+                    {
+                        var deptId = Convert.ToInt32(d["id"]);
+                        var deptName = Convert.ToString(d["name"]);
+                        var deptNode = new TreeNode(deptName) { Tag = new PermissionTag { DeptId = deptId } };
+
+                        // íŒ€ ì—†ìŒ ê·¸ë£¹
+                        var noTeamKey = Tuple.Create(deptId, 0);
+                        if (usersByDeptTeam.TryGetValue(noTeamKey, out var usersNoTeam))
+                        {
+                            var teamNoneNode = new TreeNode("(íŒ€ ì—†ìŒ)") { Tag = new PermissionTag { DeptId = deptId, TeamId = 0 } };
+                            foreach (var ur in usersNoTeam)
+                            {
+                                var uid = Convert.ToInt32(ur["id"]);
+                                var uname = Convert.ToString(ur["name"]);
+                                var userNode = new TreeNode(uname) { Tag = new PermissionTag { DeptId = deptId, TeamId = 0, UserId = uid } };
+                                teamNoneNode.Nodes.Add(userNode);
+                            }
+                            deptNode.Nodes.Add(teamNoneNode);
+                        }
+
+                        // íŒ€ ë…¸ë“œ ë° íŒ€ë³„ ì§ì›
+                        if (teamsByDept.TryGetValue(deptId, out var trows))
+                        {
+                            foreach (var tr in trows)
+                            {
+                                var teamId = Convert.ToInt32(tr["id"]);
+                                var teamName = Convert.ToString(tr["name"]);
+                                var teamNode = new TreeNode(teamName) { Tag = new PermissionTag { DeptId = deptId, TeamId = teamId } };
+
+                                var key = Tuple.Create(deptId, teamId);
+                                if (usersByDeptTeam.TryGetValue(key, out var usersInTeam))
+                                {
+                                    foreach (var ur in usersInTeam)
+                                    {
+                                        var uid = Convert.ToInt32(ur["id"]);
+                                        var uname = Convert.ToString(ur["name"]);
+                                        var userNode = new TreeNode(uname) { Tag = new PermissionTag { DeptId = deptId, TeamId = teamId, UserId = uid } };
+                                        teamNode.Nodes.Add(userNode);
+                                    }
+                                }
+
+                                deptNode.Nodes.Add(teamNode);
+                            }
+                        }
+
+                        _tvVisibility.Nodes.Add(deptNode);
+                    }
+                }
+
+                // Expand all nodes when tree is initialized
+                _tvVisibility.ExpandAll();
+
+                _tvVisibility.EndUpdate();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("ê¶Œí•œ ì„¤ì • ì´ˆê¸°í™” ì¤‘ ì˜¤ë¥˜: " + ex.Message, "ì˜¤ë¥˜", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private class PermissionTag
+        {
+            public int DeptId { get; set; }
+            public int? TeamId { get; set; }
+            public int? UserId { get; set; }
+        }
+
+        private void cboViewer_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            try
+            {
+                if (_cboViewer.SelectedIndex < 0) return;
+                object sel = _cboViewer.SelectedValue;
+                if (sel == null) return;
+                int viewerId;
+                if (sel is DataRowView drv && drv.Row.Table.Columns.Contains("id"))
+                    viewerId = Convert.ToInt32(drv["id"]);
+                else if (sel is IConvertible)
+                    viewerId = Convert.ToInt32(sel);
+                else
+                {
+                    int.TryParse(Convert.ToString(sel), out viewerId);
+                }
+                if (viewerId <= 0) return;
+                _selectedPermissionUserId = viewerId;
+
+                var permDt = DBManager.Instance.ExecuteDataTable(
+                    "SELECT dept_id, group_code FROM user_view_permission WHERE viewer_user_id=@uid",
+                    new MySqlParameter("@uid", _selectedPermissionUserId));
+
+                var allowedDepts = new HashSet<int>();
+                var allowedTeams = new HashSet<string>(); // deptId:teamId
+                var allowedUsers = new HashSet<string>(); // deptId:teamId:userId
+                foreach (DataRow r in permDt.Rows)
+                {
+                    var did = r["dept_id"] != DBNull.Value ? Convert.ToInt32(r["dept_id"]) : 0;
+                    var code = Convert.ToString(r["group_code"]);
+                    if (string.IsNullOrEmpty(code))
+                    {
+                        allowedDepts.Add(did);
+                    }
+                    else if (code.StartsWith("TEAM:"))
+                    {
+                        if (int.TryParse(code.Substring(5), out int tid))
+                            allowedTeams.Add(did + ":" + tid);
+                    }
+                    else if (code.StartsWith("USER:"))
+                    {
+                        if (int.TryParse(code.Substring(5), out int uid))
+                            allowedUsers.Add(did + ":" + 0 + ":" + uid); // íŒ€ ì—†ìŒì€ 0, ì‹¤ì œ íŒ€ì€ í›„ì²˜ë¦¬ì—ì„œ ëª¨ë‘ ë¹„êµ
+                    }
+                }
+
+                _tvUpdating = true;
+                foreach (TreeNode deptNode in _tvVisibility.Nodes)
+                {
+                    var dtag = deptNode.Tag as PermissionTag;
+                    if (dtag == null) continue;
+                    bool deptAllowed = allowedDepts.Contains(dtag.DeptId);
+                    deptNode.Checked = deptAllowed;
+
+                    foreach (TreeNode teamNode in deptNode.Nodes)
+                    {
+                        var ttag = teamNode.Tag as PermissionTag;
+                        if (ttag == null) continue;
+
+                        // íŒ€ ë…¸ë“œ ë˜ëŠ” (íŒ€ ì—†ìŒ) ë…¸ë“œ
+                        bool teamAllowed = ttag.TeamId.HasValue && allowedTeams.Contains(ttag.DeptId + ":" + (ttag.TeamId ?? 0));
+                        teamNode.Checked = teamAllowed || deptAllowed;
+
+                        foreach (TreeNode userNode in teamNode.Nodes)
+                        {
+                            var utag = userNode.Tag as PermissionTag;
+                            if (utag == null) continue;
+                            string keyUser = utag.DeptId + ":" + (utag.TeamId ?? 0) + ":" + (utag.UserId ?? 0);
+                            bool userAllowed = allowedUsers.Contains(keyUser);
+                            userNode.Checked = userAllowed || teamAllowed || deptAllowed;
+                        }
+                    }
+                }
+                _tvUpdating = false;
+            }
+            catch (Exception ex)
+            {
+                _tvUpdating = false;
+                MessageBox.Show("ì‚¬ìš©ì ê¶Œí•œ ë¡œë“œ ì¤‘ ì˜¤ë¥˜: " + ex.Message, "ì˜¤ë¥˜", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void tvVisibility_AfterCheck(object sender, TreeViewEventArgs e)
+        {
+            // ë¶€ëª¨/ìì‹ ì¼ê´„ ì²´í¬ë§Œ ìˆ˜í–‰, DB ì €ì¥ì€ ì €ì¥ ë²„íŠ¼ì—ì„œ ìˆ˜í–‰
+            if (_tvUpdating) return;
+            try
+            {
+                _tvUpdating = true;
+                // ìì‹ìœ¼ë¡œ ì „íŒŒ
+                foreach (TreeNode child in e.Node.Nodes)
+                {
+                    child.Checked = e.Node.Checked;
+                }
+                // ë¶€ëª¨ë¡œ ì „íŒŒ (ë¶€ëª¨ëŠ” í•˜ë‚˜ë¼ë„ ì²´í¬ë˜ë©´ ì²´í¬, ëª¨ë‘ í•´ì œë˜ë©´ í•´ì œ)
+                var parent = e.Node.Parent;
+                while (parent != null)
+                {
+                    bool anyChecked = false;
+                    foreach (TreeNode sib in parent.Nodes)
+                    {
+                        if (sib.Checked) { anyChecked = true; break; }
+                    }
+                    parent.Checked = anyChecked;
+                    parent = parent.Parent;
+                }
+            }
+            finally { _tvUpdating = false; }
+        }
+
+        private void btnPermSave_Click(object sender, EventArgs e)
+        {
+            if (_cboViewer.SelectedIndex < 0)
+            {
+                MessageBox.Show("ì‚¬ìš©ìë¥¼ ì„ íƒí•˜ì„¸ìš”.", "ê¶Œí•œ ì €ì¥", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            int viewerId = Convert.ToInt32((_cboViewer.SelectedValue is DataRowView drv) ? drv["id"] : _cboViewer.SelectedValue);
+            try
+            {
+                // ì „ì²´ ì‚­ì œ í›„ í˜„ì¬ ì²´í¬ ìƒíƒœë¡œ ì¬ì‚½ì…
+                DBManager.Instance.ExecuteNonQuery("DELETE FROM user_view_permission WHERE viewer_user_id=@u", new MySqlParameter("@u", viewerId));
+
+                // íŠ¸ë¦¬ ìˆœíšŒí•˜ì—¬ ë¶€ì„œ/íŒ€/ì‚¬ìš©ì ê¶Œí•œ ì €ì¥
+                foreach (TreeNode deptNode in _tvVisibility.Nodes)
+                {
+                    var dtag = deptNode.Tag as PermissionTag;
+                    if (dtag == null) continue;
+                    if (deptNode.Checked)
+                    {
+                        DBManager.Instance.ExecuteNonQuery(
+                            "INSERT INTO user_view_permission (viewer_user_id, dept_id) VALUES (@u,@d)",
+                            new MySqlParameter("@u", viewerId), new MySqlParameter("@d", dtag.DeptId));
+                    }
+                    foreach (TreeNode teamNode in deptNode.Nodes)
+                    {
+                        var ttag = teamNode.Tag as PermissionTag;
+                        if (ttag == null) continue;
+                        if (teamNode.Checked && ttag.TeamId.HasValue)
+                        {
+                            DBManager.Instance.ExecuteNonQuery(
+                                "INSERT INTO user_view_permission (viewer_user_id, dept_id, group_code) VALUES (@u,@d,@g)",
+                                new MySqlParameter("@u", viewerId), new MySqlParameter("@d", dtag.DeptId), new MySqlParameter("@g", "TEAM:" + ttag.TeamId.Value));
+                        }
+                        foreach (TreeNode userNode in teamNode.Nodes)
+                        {
+                            var utag = userNode.Tag as PermissionTag;
+                            if (utag == null || !utag.UserId.HasValue) continue;
+                            if (userNode.Checked)
+                            {
+                                DBManager.Instance.ExecuteNonQuery(
+                                    "INSERT INTO user_view_permission (viewer_user_id, dept_id, group_code) VALUES (@u,@d,@g)",
+                                    new MySqlParameter("@u", viewerId), new MySqlParameter("@d", dtag.DeptId), new MySqlParameter("@g", "USER:" + utag.UserId.Value));
+                            }
+                        }
+                    }
+                }
+
+                MessageBox.Show("ê¶Œí•œì´ ì €ì¥ë˜ì—ˆìŠµë‹ˆë‹¤.", "ì €ì¥", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("ê¶Œí•œ ì €ì¥ ì¤‘ ì˜¤ë¥˜: " + ex.Message, "ì˜¤ë¥˜", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void btnPermReset_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                _cboViewer.SelectedIndex = -1;
+                _tvVisibility.Nodes.Clear();
+                InitializePermissionTree();
+            }
+            catch { }
+        }
+
+        // Ensure stub exists to satisfy designer or callers
+        private void InitializeChatBanUI()
+        {
+            try
+            {
+                // ê°„ë‹¨í•œ ì´ˆê¸°í™”: ì‚¬ìš©ì ì½¤ë³´ ë¡œë“œ ë° ë¦¬ìŠ¤íŠ¸ë·° ì»¬ëŸ¼ ì¤€ë¹„
+                var usersDt = DBManager.Instance.ExecuteDataTable(
+                    "SELECT id, COALESCE(full_name, email) AS name FROM users WHERE company_id=@cid ORDER BY name",
+                    new MySqlParameter("@cid", _companyId));
+
+                _cbUser1.DataSource = usersDt.Copy();
+                _cbUser1.DisplayMember = "name";
+                _cbUser1.ValueMember = "id";
+
+                _cbUser2.DataSource = usersDt;
+                _cbUser2.DisplayMember = "name";
+                _cbUser2.ValueMember = "id";
+
+                // bans ëª©ë¡ì€ í•„ìš” ì‹œ DBì—ì„œ ë¡œë“œí•˜ë„ë¡ ë‚¨ê²¨ë‘ 
+            }
+            catch { }
+        }
+
+        private void btnBlock_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (_cbUser1.SelectedValue == null || _cbUser2.SelectedValue == null)
+                {
+                    MessageBox.Show("ì‚¬ìš©ì A/Bë¥¼ ì„ íƒí•˜ì„¸ìš”.", "ì•ˆë‚´", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+                var a = Convert.ToInt32(_cbUser1.SelectedValue);
+                var b = Convert.ToInt32(_cbUser2.SelectedValue);
+                if (a == b)
+                {
+                    MessageBox.Show("ë™ì¼ ì‚¬ìš©ìë¼ë¦¬ëŠ” ì°¨ë‹¨í•  ìˆ˜ ì—†ìŠµë‹ˆë‹¤.", "ì•ˆë‚´", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+                // ì°¨ë‹¨ í…Œì´ë¸”ì´ ìˆë‹¤ë©´ ì—¬ê¸°ì— ë°˜ì˜. ì—†ìœ¼ë©´ UIì—ë§Œ í‘œì‹œ.
+                var item = new ListViewItem(new[] { _cbUser1.Text, _cbUser2.Text, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") });
+                _lvBans.Items.Add(item);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("ì°¨ë‹¨ ì²˜ë¦¬ ì¤‘ ì˜¤ë¥˜: " + ex.Message, "ì˜¤ë¥˜", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void btnUnblock_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (_lvBans.SelectedItems.Count == 0)
+                {
+                    MessageBox.Show("í•´ì œí•  í•­ëª©ì„ ì„ íƒí•˜ì„¸ìš”.", "ì•ˆë‚´", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+                foreach (ListViewItem it in _lvBans.SelectedItems)
+                {
+                    _lvBans.Items.Remove(it);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("ì°¨ë‹¨ í•´ì œ ì¤‘ ì˜¤ë¥˜: " + ex.Message, "ì˜¤ë¥˜", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
     }
 }
-

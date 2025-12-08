@@ -21,10 +21,49 @@ namespace DBP_team
         private DateTime _lastPollTime;
         private NotifyIcon _notifyIcon;
 
+        // status image list for online/offline
+        private ImageList _statusImages;
+        private const int IMG_OFFLINE = 0;
+        private const int IMG_ONLINE = 1;
+        private const int IMG_WHITE = 2;
+
+        // 권한으로 보이는 사용자 캐시
+        private System.Collections.Generic.HashSet<int> _visibleUserIds;
+        private void RefreshVisibleUsers()
+        {
+            try
+            {
+                var dtVisible = Models.EmployeePermissionService.LoadVisibleEmployees(_userId, _companyId);
+                _visibleUserIds = new System.Collections.Generic.HashSet<int>(dtVisible?.AsEnumerable().Select(r => Convert.ToInt32(r["id"])) ?? Enumerable.Empty<int>());
+                // 자신은 제외 (자기 채팅 제외 케이스 외에는 무시)
+                _visibleUserIds.Remove(_userId);
+            }
+            catch
+            {
+                _visibleUserIds = new System.Collections.Generic.HashSet<int>();
+            }
+        }
+
+        private bool IsUserVisible(int otherUserId)
+        {
+            if (_visibleUserIds == null) RefreshVisibleUsers();
+            return _visibleUserIds != null && _visibleUserIds.Contains(otherUserId);
+        }
+
+        private int _lastNotifSenderId;
+        private string _lastNotifSenderName;
+
         public MainForm()
         {
             InitializeComponent();
+            UI.IconHelper.ApplyAppIcon(this);
             HookTreeEvents();
+
+            // initialize status images
+            InitStatusImages();
+
+            // Favorites UI 초기화
+            SetupFavoritesUI();
 
             // Self chat 버튼 이벤트 연결 (디자이너에 btnSelfChat이 있어야 합니다)
             try
@@ -51,6 +90,43 @@ namespace DBP_team
             // ensure cleanup
             this.FormClosed -= MainForm_FormClosed;
             this.FormClosed += MainForm_FormClosed;
+        }
+
+        private void InitStatusImages()
+        {
+            try
+            {
+                _statusImages = new ImageList();
+                _statusImages.ColorDepth = ColorDepth.Depth32Bit;
+                _statusImages.ImageSize = new Size(12, 12);
+                // gray circle
+                _statusImages.Images.Add(CreateCircleBitmap(Color.Gray, 12)); // index 0
+                // green circle
+                _statusImages.Images.Add(CreateCircleBitmap(Color.Green, 12)); // index 1
+                // white circle for non-user nodes
+                _statusImages.Images.Add(CreateCircleBitmap(Color.White, 12)); // index 2
+                treeViewUser.ImageList = _statusImages;
+            }
+            catch { /* ignore */ }
+        }
+
+        private static Bitmap CreateCircleBitmap(Color color, int size)
+        {
+            var bmp = new Bitmap(size, size);
+            using (var g = Graphics.FromImage(bmp))
+            {
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                g.Clear(Color.Transparent);
+                using (var b = new SolidBrush(color))
+                {
+                    g.FillEllipse(b, 0, 0, size - 1, size - 1);
+                }
+                using (var p = new Pen(Color.FromArgb(100, 0, 0, 0)))
+                {
+                    g.DrawEllipse(p, 0, 0, size - 1, size - 1);
+                }
+            }
+            return bmp;
         }
 
         // User 객체로 초기화
@@ -81,6 +157,9 @@ namespace DBP_team
             }
 
             _initializedFromCtor = true;
+
+            // 권한 캐시 초기화
+            RefreshVisibleUsers();
 
             UpdateSelfHeaderDisplay();
 
@@ -115,6 +194,9 @@ namespace DBP_team
                     }
                 }
 
+                // 권한 캐시 초기화
+                RefreshVisibleUsers();
+
                 UpdateSelfHeaderDisplay();
                 LoadCompanyTree();
                 LoadRecentChats();
@@ -144,6 +226,28 @@ namespace DBP_team
             treeViewUser.NodeMouseDoubleClick += TreeViewUser_NodeMouseDoubleClick;
         }
 
+        private bool IsUserOnline(int userId)
+        {
+            try
+            {
+                var dt = DBManager.Instance.ExecuteDataTable(
+                    "SELECT activity_type FROM user_activity_logs WHERE user_id = @uid ORDER BY created_at DESC LIMIT 1",
+                    new MySqlParameter("@uid", userId));
+                if (dt != null && dt.Rows.Count > 0)
+                {
+                    var act = dt.Rows[0]["activity_type"]?.ToString();
+                    return string.Equals(act, "LOGIN", StringComparison.OrdinalIgnoreCase);
+                }
+            }
+            catch { }
+            return false;
+        }
+
+        private int GetStatusImageIndex(bool isOnline)
+        {
+            return isOnline ? IMG_ONLINE : IMG_OFFLINE;
+        }
+
         // 트리 노드 더블클릭 핸들러: user:ID 태그를 파싱해 ChatForm 열기
         private void TreeViewUser_NodeMouseDoubleClick(object sender, TreeNodeMouseClickEventArgs e)
         {
@@ -165,6 +269,13 @@ namespace DBP_team
                     if (_userId <= 0)
                     {
                         MessageBox.Show("로그인 사용자 정보가 없습니다.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        return;
+                    }
+
+                    // ban check
+                    if (ChatBanDAO.IsChatBanned(_userId, otherId))
+                    {
+                        MessageBox.Show("관리자 정책에 의해 대화가 제한된 사용자입니다.");
                         return;
                     }
 
@@ -218,7 +329,7 @@ namespace DBP_team
             {
                 if (_companyId <= 0)
                 {
-                    treeViewUser.Nodes.Add(new TreeNode("회사 정보가 없습니다."));
+                    treeViewUser.Nodes.Add(new TreeNode("회사 정보가 없습니다.") { ImageIndex = IMG_WHITE, SelectedImageIndex = IMG_WHITE });
                     return;
                 }
 
@@ -228,16 +339,20 @@ namespace DBP_team
 
                 if (dtDeps == null || dtDeps.Rows.Count == 0)
                 {
-                    treeViewUser.Nodes.Add(new TreeNode("등록된 부서가 없습니다."));
+                    treeViewUser.Nodes.Add(new TreeNode("등록된 부서가 없습니다.") { ImageIndex = IMG_WHITE, SelectedImageIndex = IMG_WHITE });
                     return;
                 }
+
+                // 권한 서비스로 현재 로그인 사용자가 볼 수 있는 직원 전체 목록을 한 번만 조회
+                var dtVisible = Models.EmployeePermissionService.LoadVisibleEmployees(_userId, _companyId);
 
                 foreach (DataRow dep in dtDeps.Rows)
                 {
                     int depId = Convert.ToInt32(dep["id"]);
                     string depName = dep["name"]?.ToString() ?? $"부서 {depId}";
-                    var depNode = new TreeNode(depName) { Tag = $"department:{depId}" };
+                    var depNode = new TreeNode(depName) { Tag = $"department:{depId}", ImageIndex = IMG_WHITE, SelectedImageIndex = IMG_WHITE };
 
+                    // 팀 목록
                     var dtTeams = DBManager.Instance.ExecuteDataTable(
                         "SELECT id, name FROM teams WHERE department_id = @did ORDER BY name",
                         new MySqlParameter("@did", depId));
@@ -248,28 +363,29 @@ namespace DBP_team
                         {
                             int teamId = Convert.ToInt32(team["id"]);
                             string teamName = team["name"]?.ToString() ?? $"팀 {teamId}";
-                            var teamNode = new TreeNode(teamName) { Tag = $"team:{teamId}" };
+                            var teamNode = new TreeNode(teamName) { Tag = $"team:{teamId}", ImageIndex = IMG_WHITE, SelectedImageIndex = IMG_WHITE };
 
-                            var dtUsersInTeam = DBManager.Instance.ExecuteDataTable(
-                                "SELECT id, full_name, email FROM users WHERE company_id = @cid AND department_id = @did AND team_id = @tid ORDER BY full_name",
-                                new MySqlParameter("@cid", _companyId),
-                                new MySqlParameter("@did", depId),
-                                new MySqlParameter("@tid", teamId));
-
-                            if (dtUsersInTeam != null && dtUsersInTeam.Rows.Count > 0)
+                            // dtVisible에서 해당 부서+팀 사용자만 추가
+                            if (dtVisible != null && dtVisible.Rows.Count > 0)
                             {
-                                foreach (DataRow u in dtUsersInTeam.Rows)
+                                string expr = $"department_id = {depId} AND team_id = {teamId}";
+                                DataRow[] rows = dtVisible.Select(expr);
+                                foreach (var u in rows)
                                 {
                                     int uid = Convert.ToInt32(u["id"]);
-                                    // 로그인 사용자면 건너뜀
                                     if (uid == _userId) continue;
-
-                                    var baseDisplay = u["full_name"]?.ToString();
+                                    var baseDisplay = u["name"]?.ToString();
                                     if (string.IsNullOrWhiteSpace(baseDisplay)) baseDisplay = u["email"]?.ToString() ?? "이름 없음";
-                                    // 멀티프로필 적용 (owner=uid, viewer=_userId)
                                     var mpDisplay = MultiProfileService.GetDisplayNameForViewer(uid, _userId);
                                     if (!string.IsNullOrWhiteSpace(mpDisplay)) baseDisplay = mpDisplay;
-                                    teamNode.Nodes.Add(new TreeNode(baseDisplay) { Tag = $"user:{uid}" });
+                                    bool online = IsUserOnline(uid);
+                                    var userNode = new TreeNode(baseDisplay)
+                                    {
+                                        Tag = $"user:{uid}",
+                                        ImageIndex = GetStatusImageIndex(online),
+                                        SelectedImageIndex = GetStatusImageIndex(online)
+                                    };
+                                    teamNode.Nodes.Add(userNode);
                                 }
                             }
 
@@ -277,24 +393,27 @@ namespace DBP_team
                         }
                     }
 
-                    var dtUsersNoTeam = DBManager.Instance.ExecuteDataTable(
-                        "SELECT id, full_name, email FROM users WHERE company_id = @cid AND department_id = @did AND (team_id IS NULL OR team_id = 0) ORDER BY full_name",
-                        new MySqlParameter("@cid", _companyId),
-                        new MySqlParameter("@did", depId));
-
-                    if (dtUsersNoTeam != null && dtUsersNoTeam.Rows.Count > 0)
+                    // 팀에 속하지 않은 사용자들 (team_id IS NULL OR 0)
+                    if (dtVisible != null && dtVisible.Rows.Count > 0)
                     {
-                        foreach (DataRow u in dtUsersNoTeam.Rows)
+                        string exprNoTeam = $"department_id = {depId} AND (team_id IS NULL OR team_id = 0)";
+                        DataRow[] noTeamRows = dtVisible.Select(exprNoTeam);
+                        foreach (var u in noTeamRows)
                         {
                             int uid = Convert.ToInt32(u["id"]);
-                            // 로그인 사용자면 건너뜀
                             if (uid == _userId) continue;
-
-                            var baseDisplay = u["full_name"]?.ToString();
+                            var baseDisplay = u["name"]?.ToString();
                             if (string.IsNullOrWhiteSpace(baseDisplay)) baseDisplay = u["email"]?.ToString() ?? "이름 없음";
                             var mpDisplay = MultiProfileService.GetDisplayNameForViewer(uid, _userId);
                             if (!string.IsNullOrWhiteSpace(mpDisplay)) baseDisplay = mpDisplay;
-                            depNode.Nodes.Add(new TreeNode(baseDisplay) { Tag = $"user:{uid}" });
+                            bool online = IsUserOnline(uid);
+                            var userNode = new TreeNode(baseDisplay)
+                            {
+                                Tag = $"user:{uid}",
+                                ImageIndex = GetStatusImageIndex(online),
+                                SelectedImageIndex = GetStatusImageIndex(online)
+                            };
+                            depNode.Nodes.Add(userNode);
                         }
                     }
 
@@ -338,6 +457,9 @@ namespace DBP_team
                 foreach (DataRow r in dt.Rows)
                 {
                     var uid = Convert.ToInt32(r["user_id"]);
+                    // 권한: 숨겨진 사용자는 제외
+                    if (!IsUserVisible(uid)) continue;
+
                     var nameBase = r["name"]?.ToString() ?? "(이름 없음)";
                     // 멀티프로필 적용 (상대가 나에게 보여줄 이름)
                     var mpName = MultiProfileService.GetDisplayNameForViewer(uid, _userId);
@@ -362,8 +484,22 @@ namespace DBP_team
             var lvi = listViewRecent.SelectedItems[0];
             if (!(lvi.Tag is int otherId)) return;
 
+            // 권한: 숨겨진 사용자는 열지 않음
+            if (!IsUserVisible(otherId))
+            {
+                MessageBox.Show("권한 설정에 의해 숨겨진 사용자입니다.");
+                return;
+            }
+
             var otherDisplay = MultiProfileService.GetDisplayNameForViewer(otherId, _userId);
             if (string.IsNullOrWhiteSpace(otherDisplay)) otherDisplay = lvi.Text;
+            // ban check
+            if (ChatBanDAO.IsChatBanned(_userId, otherId))
+            {
+                MessageBox.Show("관리자 정책에 의해 대화가 제한된 사용자입니다.");
+                return;
+            }
+
             var chat = new ChatForm(_userId, otherId, otherDisplay);
             chat.StartPosition = FormStartPosition.CenterParent;
             chat.Show(this);
@@ -379,35 +515,44 @@ namespace DBP_team
 
                 if (_pollTimer == null)
                 {
-                    _pollTimer = new System.Windows.Forms.Timer();
-                    _pollTimer.Interval = 3000; // 3초
+                    _pollTimer = new System.Windows.Forms.Timer { Interval = 3000 };
                     _pollTimer.Tick += PollTimer_Tick;
                 }
-
                 if (_notifyIcon == null)
                 {
                     _notifyIcon = new NotifyIcon();
-                    _notifyIcon.Icon = SystemIcons.Application;
+                    _notifyIcon.Icon = UI.IconHelper.GetAppIcon();
                     _notifyIcon.Visible = true;
                     _notifyIcon.BalloonTipTitle = "새 메시지";
-                    _notifyIcon.BalloonTipClicked += (s, e) =>
-                    {
-                        // 사용자가 풍선을 클릭하면 최근 리스트 갱신
-                        LoadRecentChats();
-                    };
+                    _notifyIcon.BalloonTipClicked -= NotifyIcon_BalloonTipClicked;
+                    _notifyIcon.BalloonTipClicked += NotifyIcon_BalloonTipClicked;
                 }
-
                 _pollTimer.Start();
             }
-            catch
+            catch { }
+        }
+
+        private void NotifyIcon_BalloonTipClicked(object sender, EventArgs e)
+        {
+            try
             {
-                // 폴링 초기화 실패 무시
+                if (_userId <= 0 || _lastNotifSenderId <= 0) return;
+                if (ChatBanDAO.IsChatBanned(_userId, _lastNotifSenderId))
+                {
+                    MessageBox.Show("관리자 정책에 의해 대화가 제한된 사용자입니다.");
+                    return;
+                }
+                var mpName = MultiProfileService.GetDisplayNameForViewer(_lastNotifSenderId, _userId);
+                var disp = string.IsNullOrWhiteSpace(mpName) ? (_lastNotifSenderName ?? "상대") : mpName;
+                var chat = new ChatForm(_userId, _lastNotifSenderId, disp);
+                chat.StartPosition = FormStartPosition.CenterParent;
+                chat.Show(this);
             }
+            catch { }
         }
 
         private async void PollTimer_Tick(object sender, EventArgs e)
         {
-            // 비동기 DB 호출: 새로 온 나에게 향한 메시지(created_at > _lastPollTime)
             try
             {
                 if (_userId <= 0) return;
@@ -433,22 +578,27 @@ namespace DBP_team
                         var created = r["created_at"] != DBNull.Value ? Convert.ToDateTime(r["created_at"]) : DateTime.Now;
                         if (created > newest) newest = created;
 
+                        // 마지막 알림 상대 저장 (풍선 클릭 시 바로 열기)
+                        _lastNotifSenderId = senderId;
+                        _lastNotifSenderName = baseName;
+
                         // 짧게 메시지 표시 (최대 80자)
                         var shortMsg = message.Length > 80 ? message.Substring(0, 77) + "..." : message;
-                        // Show balloon (non-modal)
                         try
                         {
-                            _notifyIcon.BalloonTipTitle = $"새 메시지: {baseName}";
-                            _notifyIcon.BalloonTipText = shortMsg;
-                            _notifyIcon.ShowBalloonTip(4000);
+                            if (_notifyIcon != null)
+                            {
+                                _notifyIcon.Visible = true; // 일부 환경에서 필요
+                                _notifyIcon.BalloonTipTitle = $"새 메시지: {baseName}";
+                                _notifyIcon.BalloonTipText = shortMsg;
+                                _notifyIcon.ShowBalloonTip(4000);
+                            }
                         }
                         catch { }
                     }
 
-                    // 최신 시간 갱신
                     _lastPollTime = newest;
 
-                    // 새 메시지 탐지 시 최근 리스트 갱신 (UI thread)
                     try
                     {
                         if (!this.IsDisposed && this.IsHandleCreated)
@@ -457,10 +607,7 @@ namespace DBP_team
                     catch { }
                 }
             }
-            catch
-            {
-                // 폴링 중 오류는 무시(로그 필요 시 추가)
-            }
+            catch { }
         }
 
         // Stop polling and dispose notify icon on close
@@ -574,6 +721,9 @@ namespace DBP_team
                 foreach (DataRow row in dt.Rows)
                 {
                     int userId = Convert.ToInt32(row["user_id"]);
+                    // 권한: 숨겨진 사용자는 즐겨찾기에서 제외
+                    if (!IsUserVisible(userId)) continue;
+
                     string name = row["display_name"]?.ToString() ?? string.Empty;
                     string dept = row["department_name"]?.ToString() ?? string.Empty;
 
@@ -584,6 +734,26 @@ namespace DBP_team
                     var item = new ListViewItem(name) { Tag = userId };
                     item.ToolTipText = dept;
                     lvFavorites.Items.Add(item);
+                }
+
+                // 즐겨찾기가 비어있을 때 안내 텍스트 추가
+                if (lvFavorites.Items.Count == 0)
+                {
+                    var emptyItem = new ListViewItem("즐겨찾기가 비어있습니다")
+                    {
+                        ForeColor = Color.FromArgb(150, 150, 150),
+                        Font = new Font("맑은 고딕", 9F, FontStyle.Italic),
+                        Tag = null // 클릭 방지용
+                    };
+                    lvFavorites.Items.Add(emptyItem);
+
+                    var hintItem = new ListViewItem("부서 목록에서 직원을 우클릭하여 추가하세요")
+                    {
+                        ForeColor = Color.FromArgb(150, 150, 150),
+                        Font = new Font("맑은 고딕", 8F, FontStyle.Italic),
+                        Tag = null
+                    };
+                    lvFavorites.Items.Add(hintItem);
                 }
             }
             catch (Exception ex)
@@ -650,8 +820,22 @@ namespace DBP_team
             var item = lvFavorites.SelectedItems[0];
             if (!(item.Tag is int targetUserId)) return;
 
+            // 권한: 숨겨진 사용자는 열지 않음
+            if (!IsUserVisible(targetUserId))
+            {
+                MessageBox.Show("권한 설정에 의해 숨겨진 사용자입니다.");
+                return;
+            }
+
             var displayName = MultiProfileService.GetDisplayNameForViewer(targetUserId, _userId);
             if (string.IsNullOrWhiteSpace(displayName)) displayName = item.Text;
+
+            // ban check
+            if (ChatBanDAO.IsChatBanned(_userId, targetUserId))
+            {
+                MessageBox.Show("관리자 정책에 의해 대화가 제한된 사용자입니다.");
+                return;
+            }
 
             var chat = new ChatForm(_userId, targetUserId, displayName);
             chat.StartPosition = FormStartPosition.CenterParent;
@@ -724,6 +908,8 @@ namespace DBP_team
                         {
                             int uid = Convert.ToInt32(row["id"]);
                             if (uid == _userId) continue;
+                            // 권한: 숨겨진 사용자는 검색 결과에서 제외
+                            if (!IsUserVisible(uid)) continue;
 
                             string baseDisplay = row["full_name"]?.ToString() ?? row["email"]?.ToString() ?? "이름 없음";
                             var mpDisplay = MultiProfileService.GetDisplayNameForViewer(uid, _userId);
@@ -732,7 +918,13 @@ namespace DBP_team
                             string deptName = row["department_name"]?.ToString();
                             string nodeText = string.IsNullOrEmpty(deptName) ? baseDisplay : $"{baseDisplay} ({deptName})";
 
-                            var userNode = new TreeNode(nodeText) { Tag = $"user:{uid}" };
+                            bool online = IsUserOnline(uid);
+                            var userNode = new TreeNode(nodeText)
+                            {
+                                Tag = $"user:{uid}",
+                                ImageIndex = GetStatusImageIndex(online),
+                                SelectedImageIndex = GetStatusImageIndex(online)
+                            };
                             searchRootNode.Nodes.Add(userNode);
                         }
                     }
@@ -765,6 +957,93 @@ namespace DBP_team
                 e.SuppressKeyPress = true; // 클릭 소리 방지
                 SearchUsers();
             }
+        }
+
+        private void lvFavorites_SelectedIndexChanged(object sender, EventArgs e)
+        {
+
+        }
+
+        private void SetupFavoritesUI()
+        {
+            try
+            {
+                if (lvFavorites != null)
+                {
+                    lvFavorites.View = View.Details;
+                    lvFavorites.FullRowSelect = true;
+                    lvFavorites.HideSelection = false;
+                    lvFavorites.MultiSelect = false;
+
+                    if (lvFavorites.Columns.Count == 0)
+                    {
+                        lvFavorites.Columns.Add("이름", 160);
+                        lvFavorites.Columns.Add("부서", 120);
+                    }
+
+                    lvFavorites.DoubleClick -= OpenChatForSelectedFavorite;
+                    lvFavorites.DoubleClick += OpenChatForSelectedFavorite;
+
+                    var cmsFav = new ContextMenuStrip();
+                    var miOpen = new ToolStripMenuItem("채팅 열기", null, (s, e) => OpenChatForSelectedFavorite(s, e));
+                    var miRemove = new ToolStripMenuItem("즐겨찾기 해제", null, (s, e) => UnfavoriteSelected(s, e));
+                    cmsFav.Items.Add(miOpen);
+                    cmsFav.Items.Add(new ToolStripSeparator());
+                    cmsFav.Items.Add(miRemove);
+                    lvFavorites.ContextMenuStrip = cmsFav;
+                }
+
+                if (treeViewUser != null)
+                {
+                    var cmsTree = new ContextMenuStrip();
+                    var miAddFav = new ToolStripMenuItem("즐겨찾기에 추가", null, (s, e) => FavoriteSelectedDepartmentNode(s, e));
+                    var miViewProfile = new ToolStripMenuItem("프로필 보기", null, (s, e) => ViewSelectedUserProfile());
+                    cmsTree.Items.Add(miAddFav);
+                    cmsTree.Items.Add(miViewProfile);
+                    treeViewUser.ContextMenuStrip = cmsTree;
+                    // replace external handler with inline to avoid missing context errors
+                    treeViewUser.NodeMouseClick -= TreeViewUser_NodeMouseClick_Select;
+                    treeViewUser.NodeMouseClick += (s, e) =>
+                    {
+                        try { treeViewUser.SelectedNode = e.Node; } catch { }
+                    };
+                }
+            }
+            catch { }
+        }
+
+        private void ViewSelectedUserProfile()
+        {
+            var node = treeViewUser.SelectedNode;
+            if (node == null || node.Tag == null) return;
+            if (!TryGetUserIdFromNodeTag(node.Tag, out int targetUserId))
+            {
+                MessageBox.Show("사용자만 선택하세요.", "안내", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (_userId <= 0) return;
+
+            var mpName = MultiProfileService.GetDisplayNameForViewer(targetUserId, _userId);
+            var displayName = string.IsNullOrWhiteSpace(mpName) ? node.Text : mpName;
+
+            // Read-only profile view of target
+            using (var pf = new ProfileForm(viewerId: _userId, targetUserId: targetUserId, readOnly: true))
+            {
+                pf.Text = displayName + " 프로필";
+                pf.StartPosition = FormStartPosition.CenterParent;
+                pf.ShowDialog(this);
+            }
+        }
+
+        // Add missing handler stub to satisfy designer/event hookups
+        private void TreeViewUser_NodeMouseClick_Select(object sender, TreeNodeMouseClickEventArgs e)
+        {
+            try
+            {
+                if (treeViewUser == null || e == null) return;
+                treeViewUser.SelectedNode = e.Node;
+            }
+            catch { }
         }
     }
 }

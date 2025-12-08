@@ -13,6 +13,9 @@ namespace DBP_team.Controls
         private Label lblTime;
         private Label lblRead; // add read indicator
         private Button btnDownload; // added
+        private ContextMenuStrip _cms;
+        private ToolStripMenuItem _miEdit;
+        private ToolStripMenuItem _miDelete;
 
         private const int SIDE_MARGIN = 12;
         private const int DEFAULT_PADDING_H = 8;
@@ -23,7 +26,11 @@ namespace DBP_team.Controls
 
         private int _fileId = 0;
         private string _fileName = null;
+        private int _messageId = 0; // chat table id (0 if not persisted)
+        private bool _isMine = false;
 
+        public event Action<int> OnEditRequested; // messageId
+        public event Action<int> OnDeleteRequested; // messageId
         public event Action<int, string> OnDownloadRequested; // fileId, filename
 
         public ChatBubbleControl()
@@ -66,38 +73,50 @@ namespace DBP_team.Controls
             this.lblTime = new Label();
             this.lblRead = new Label();
             this.btnDownload = new Button();
+            _cms = new ContextMenuStrip();
+            _miEdit = new ToolStripMenuItem("수정");
+            _miDelete = new ToolStripMenuItem("삭제");
+            _cms.Items.AddRange(new ToolStripItem[] { _miEdit, _miDelete });
+            _miEdit.Click += (s, e) => { if (_isMine && _messageId > 0) OnEditRequested?.Invoke(_messageId); };
+            _miDelete.Click += (s, e) => { if (_isMine && _messageId > 0) OnDeleteRequested?.Invoke(_messageId); };
 
             // panelBubble 기본 설정
-            this.panelBubble.BackColor = Color.LightGray;
+            this.panelBubble.BackColor = Color.FromArgb(240, 240, 240);
             this.panelBubble.Padding = new Padding(DEFAULT_PADDING_H, DEFAULT_PADDING_V, DEFAULT_PADDING_H, DEFAULT_PADDING_V + 2);
             this.panelBubble.AutoSize = true;
             this.panelBubble.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            this.panelBubble.ContextMenuStrip = _cms;
 
             // lblMessage
             this.lblMessage.AutoSize = true;
             this.lblMessage.MaximumSize = new Size(300, 0); // 런타임에서 조정
-            this.lblMessage.Font = new Font("나눔고딕", 10F, FontStyle.Regular);
-            this.lblMessage.ForeColor = Color.Black;
+            this.lblMessage.Font = new Font("맑은 고딕", 10F, FontStyle.Regular);
+            this.lblMessage.ForeColor = Color.FromArgb(50, 50, 50);
 
             // lblTime: 오른쪽 정렬을 위해 AutoSize=false, 폭을 패널 폭에 맞춤
             this.lblTime.AutoSize = false;
             this.lblTime.Height = 14;
-            this.lblTime.Font = new Font("나눔고딕", 8F);
+            this.lblTime.Font = new Font("맑은 고딕", 8F);
             this.lblTime.TextAlign = ContentAlignment.MiddleRight;
-            this.lblTime.ForeColor = Color.FromArgb(120, 0, 0, 0);
+            this.lblTime.ForeColor = Color.FromArgb(120, 120, 120);
 
             // lblRead: 왼쪽 아래 작은 표시
             this.lblRead.AutoSize = true;
-            this.lblRead.Font = new Font("나눔고딕", 8F);
+            this.lblRead.Font = new Font("맑은 고딕", 8F);
             this.lblRead.Text = string.Empty;
-            this.lblRead.ForeColor = Color.FromArgb(120, 0, 0, 0);
+            this.lblRead.ForeColor = Color.FromArgb(120, 120, 120);
 
             // btnDownload
             this.btnDownload.AutoSize = true;
             this.btnDownload.Text = "다운로드";
-            this.btnDownload.Font = new Font("나눔고딕", 8F);
+            this.btnDownload.Font = new Font("맑은 고딕", 8F);
             this.btnDownload.Visible = false;
             this.btnDownload.Click += BtnDownload_Click;
+            this.btnDownload.FlatStyle = FlatStyle.Flat;
+            this.btnDownload.FlatAppearance.BorderSize = 1;
+            this.btnDownload.FlatAppearance.BorderColor = Color.FromArgb(200, 200, 200);
+            this.btnDownload.BackColor = Color.White;
+            this.btnDownload.ForeColor = Color.FromArgb(80, 80, 80);
 
             // 조립
             this.panelBubble.Controls.Add(lblMessage);
@@ -135,17 +154,22 @@ namespace DBP_team.Controls
 
             // lblTime 위치 및 폭: 말풍선 내부 아래, 폭은 panelBubble 내부폭으로 맞추고 오른쪽 정렬
             int innerWidth = Math.Max(1, panelBubble.ClientSize.Width - panelBubble.Padding.Horizontal);
-            lblTime.Size = new Size(innerWidth, lblTime.Height);
-            lblTime.Location = new Point(panelBubble.Padding.Left, panelBubble.Padding.Top + lblMessage.Height + 4);
+            int timeTop = panelBubble.Padding.Top + lblMessage.Height + 4;
 
-            // 읽음 라벨은 좌측 하단, 시간과 같은 y에 두되 좌측 정렬
-            lblRead.Location = new Point(panelBubble.Padding.Left, lblTime.Top);
+            // place read label to the right of time, on the same line, right aligned
+            int readWidth = lblRead.Visible ? lblRead.PreferredWidth : 0;
+            lblRead.Location = new Point(panelBubble.Padding.Left + innerWidth - readWidth, timeTop);
+
+            int timeWidth = Math.Max(0, innerWidth - (readWidth > 0 ? (readWidth + 6) : 0));
+            lblTime.Size = new Size(timeWidth, lblTime.Height);
+            lblTime.Location = new Point(panelBubble.Padding.Left, timeTop);
 
             // btnDownload 위치: 시간 왼쪽에 배치
             btnDownload.Location = new Point(panelBubble.Padding.Left, lblTime.Top + lblTime.Height + 4);
 
             // panelBubble 높이 자동 확대
-            panelBubble.Height = panelBubble.Padding.Vertical + lblMessage.Height + lblTime.Height + (btnDownload.Visible ? btnDownload.Height + 6 : 4);
+            int extra = btnDownload.Visible ? (btnDownload.Height + 6) : 4;
+            panelBubble.Height = panelBubble.Padding.Vertical + lblMessage.Height + lblTime.Height + extra;
 
             // 컨트롤 높이
             this.Height = panelBubble.Height + 6;
@@ -193,6 +217,7 @@ namespace DBP_team.Controls
 
             lblMessage.Text = message ?? string.Empty;
             lblTime.Text = time.ToString("yyyy-MM-dd HH:mm");
+            _isMine = isMine;
 
             // 1) 계산: 퍼센트 기반 폭 + 픽셀 캡 적용 → 절대 최대 폭 결정
             int pctWidth = Math.Max(60, containerWidth * MAX_BUBBLE_PERCENT / 100);
@@ -237,9 +262,9 @@ namespace DBP_team.Controls
             {
                 panelBubble.Left = SIDE_MARGIN;
                 panelBubble.BackColor = Color.FromArgb(240, 240, 240);
-                lblMessage.ForeColor = Color.Black;
-                lblTime.ForeColor = Color.FromArgb(120, 0, 0, 0);
-                lblRead.ForeColor = Color.FromArgb(120, 0, 0, 0);
+                lblMessage.ForeColor = Color.FromArgb(50, 50, 50);
+                lblTime.ForeColor = Color.FromArgb(120, 120, 120);
+                lblRead.ForeColor = Color.FromArgb(120, 120, 120);
             }
 
             // 8) 높이 재조정
@@ -248,6 +273,19 @@ namespace DBP_team.Controls
 
             UpdateBubbleRegion();
             Invalidate();
+
+            // context menu: enable only for own text messages (not file token)
+            bool isFile = !string.IsNullOrEmpty(message) && message.StartsWith("FILE:", StringComparison.OrdinalIgnoreCase);
+            _miEdit.Enabled = _isMine && !isFile && _messageId > 0;
+            _miDelete.Enabled = _isMine && _messageId > 0;
+        }
+
+        public void SetMessageId(int id)
+        {
+            _messageId = id;
+            // update menu enabled state
+            _miEdit.Enabled = _isMine && _messageId > 0;
+            _miDelete.Enabled = _isMine && _messageId > 0;
         }
 
         private void EnsureInit()
@@ -263,6 +301,8 @@ namespace DBP_team.Controls
         public void SetRead(bool isRead)
         {
             lblRead.Text = isRead ? "읽음" : string.Empty;
+            lblRead.Visible = isRead;
+            this.PerformLayout();
         }
 
         public void SetFile(int fileId, string fileName)

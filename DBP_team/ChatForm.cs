@@ -13,6 +13,7 @@ using System.Threading;
 using System.Linq;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
+using DBP_team.UI;
 
 namespace DBP_team
 {
@@ -43,16 +44,15 @@ namespace DBP_team
         public ChatForm(int myUserId, int otherUserId, string otherName)
         {
             InitializeComponent();
+            UI.IconHelper.ApplyAppIcon(this);
 
             _myUserId = myUserId;
             _otherUserId = otherUserId;
-            // 대화 상단에 표시할 이름은 otherId 관점에서의 내 표시명으로 교체 (상대에게 내가 어떻게 보이는지)
             var nameForHeader = MultiProfileService.GetDisplayNameForViewer(_myUserId, _otherUserId);
             _otherName = string.IsNullOrWhiteSpace(otherName) ? (string.IsNullOrWhiteSpace(nameForHeader) ? "상대" : nameForHeader) : otherName;
 
             labelChat.Text = _otherName;
 
-            // 기존 listChat(디자이너)에 의존하므로 숨기고 FlowLayoutPanel을 추가
             if (this.Controls.Contains(listChat)) listChat.Visible = false;
 
             _flow = new FlowLayoutPanel
@@ -91,18 +91,29 @@ namespace DBP_team
             LoadMessages();
             ConnectToChatServer();
 
-            // ensure search UI is initialized label
             lblSearchCount.Text = "0/0";
+
+            txtChat.KeyDown += (s, e) =>
+            {
+                if (e.KeyCode == Keys.Enter && !e.Shift)
+                {
+                    e.Handled = true;
+                    e.SuppressKeyPress = true;
+                    btnSend.PerformClick();
+                }
+            };
         }
 
         private void ConnectToChatServer()
         {
             try
             {
+                // 자기 자신과의 채팅은 서버 연결이 불필요하므로 바로 반환
+                if (_myUserId == _otherUserId) return;
+
                 var host = ResolveHost();
 
                 _tcp = new TcpClient();
-                // If host was not resolvable via quick probe (edge case), fallback to external
                 if (string.IsNullOrEmpty(host)) host = ExternalHost;
                 _tcp.Connect(host, ChatServerPort);
                 var ns = _tcp.GetStream();
@@ -113,7 +124,7 @@ namespace DBP_team
                 _writer.WriteLine("AUTH|" + _myUserId);
                 var resp = _reader.ReadLine();
 
-                // mark existing messages from other user as read
+                // mark existing messages from other user as read (server side)
                 _writer.WriteLine("READ|" + _myUserId + "|" + _otherUserId);
 
                 _recvThread = new Thread(RecvLoop) { IsBackground = true };
@@ -126,7 +137,6 @@ namespace DBP_team
             }
         }
 
-        // Decide once per process: try internal first with short timeout, else external
         private static string ResolveHost()
         {
             if (!string.IsNullOrEmpty(_resolvedHost)) return _resolvedHost;
@@ -167,34 +177,78 @@ namespace DBP_team
                     var line = _reader.ReadLine();
                     if (line == null) break;
                     var parts = line.Split('|');
-                    if (parts.Length >= 4 && parts[0] == "MSG")
+                    if (parts.Length >= 5 && parts[0] == "MSG")
                     {
-                        int from = 0, to = 0;
+                        int from = 0, to = 0, mid = 0;
                         int.TryParse(parts[1], out from);
                         int.TryParse(parts[2], out to);
                         var msg = DecodeBase64(parts[3]);
+                        int.TryParse(parts[4], out mid);
+
+                        // 자기 자신과의 채팅은 서버 echo를 무시 (중복 방지)
+                        if (_myUserId == _otherUserId && from == _myUserId && to == _myUserId)
+                            continue;
+
                         if (from == _otherUserId && to == _myUserId)
                         {
                             var time = DateTime.Now;
                             this.BeginInvoke((Action)(() =>
                             {
-                                AddBubbleImmediate(msg, time, false, 0);
+                                // add bubble with real message id so edits/deletes apply while open
+                                var bubble = CreateBubble(msg, time, false, mid);
+                                _flow.Controls.Add(bubble);
+                                _flow.ScrollControlIntoView(bubble);
                                 UpdateRecentList();
-                                // after displaying, send READ ack to server to mark them read
                                 _writer?.WriteLine("READ|" + _myUserId + "|" + _otherUserId);
                             }));
                         }
                     }
                     else if (parts.Length >= 3 && parts[0] == "READ")
                     {
-                        // other user read my messages; update my bubbles to show '읽음'
                         int readerId = 0, senderId = 0;
                         int.TryParse(parts[1], out readerId);
                         int.TryParse(parts[2], out senderId);
                         if (readerId == _otherUserId && senderId == _myUserId)
                         {
-                            this.BeginInvoke((Action)(MarkMyMessagesRead));
+                            // DB에 읽음 표시 반영
+                            try
+                            {
+                                DBManager.Instance.ExecuteNonQuery(
+                                    "UPDATE chat SET is_read = 1 WHERE sender_id = @me AND receiver_id = @other AND is_read <> 1",
+                                    new MySqlParameter("@me", _myUserId),
+                                    new MySqlParameter("@other", _otherUserId));
+                            }
+                            catch { }
+
+                            this.BeginInvoke((Action)(ApplyReadToMyMessages));
                         }
+                    }
+                    else if (parts.Length >= 4 && parts[0] == "SENT")
+                    {
+                        // SENT|from|to|messageId -> update last mine bubble id
+                        int from = 0, to = 0, mid = 0;
+                        int.TryParse(parts[1], out from);
+                        int.TryParse(parts[2], out to);
+                        int.TryParse(parts[3], out mid);
+                        if (from == _myUserId && to == _otherUserId && mid > 0)
+                        {
+                            this.BeginInvoke((Action)(() => ApplySentMessageId(mid)));
+                        }
+                    }
+                    else if (parts.Length >= 3 && parts[0] == "EDIT")
+                    {
+                        // Format: EDIT|messageId|base64(newText)
+                        int msgId = 0;
+                        int.TryParse(parts[1], out msgId);
+                        var newText = DecodeBase64(parts[2]);
+                        this.BeginInvoke((Action)(() => ApplyRemoteEdit(msgId, newText)));
+                    }
+                    else if (parts.Length >= 2 && parts[0] == "DEL")
+                    {
+                        // Format: DEL|messageId
+                        int msgId = 0;
+                        int.TryParse(parts[1], out msgId);
+                        this.BeginInvoke((Action)(() => ApplyRemoteDelete(msgId)));
                     }
                 }
             }
@@ -204,7 +258,8 @@ namespace DBP_team
             }
         }
 
-        private void MarkMyMessagesRead()
+        // New helper: mark my outgoing bubbles as read
+        private void ApplyReadToMyMessages()
         {
             foreach (Control c in _flow.Controls)
             {
@@ -212,11 +267,52 @@ namespace DBP_team
                 if (bubble == null) continue;
                 var t = bubble.Tag as Tuple<string, DateTime, bool, int>;
                 if (t == null) continue;
-                if (t.Item3) // my message
+                if (t.Item3)
                 {
                     bubble.SetRead(true);
                 }
             }
+        }
+
+        private void ApplyRemoteEdit(int messageId, string newText)
+        {
+            try
+            {
+                foreach (Control c in _flow.Controls)
+                {
+                    var b = c as ChatBubbleControl;
+                    if (b == null) continue;
+                    var t = b.Tag as Tuple<string, DateTime, bool, int>;
+                    if (t != null && t.Item4 == messageId)
+                    {
+                        var newTag = Tuple.Create(newText, t.Item2, t.Item3, t.Item4);
+                        b.Tag = newTag;
+                        b.SetData(newText, t.Item2, t.Item3, _flow.ClientSize.Width);
+                        break;
+                    }
+                }
+            }
+            catch { }
+        }
+
+        private void ApplyRemoteDelete(int messageId)
+        {
+            try
+            {
+                for (int i = 0; i < _flow.Controls.Count; i++)
+                {
+                    var b = _flow.Controls[i] as ChatBubbleControl;
+                    if (b == null) continue;
+                    var t = b.Tag as Tuple<string, DateTime, bool, int>;
+                    if (t != null && t.Item4 == messageId)
+                    {
+                        _flow.Controls.RemoveAt(i);
+                        b.Dispose();
+                        break;
+                    }
+                }
+            }
+            catch { }
         }
 
         private static string EncodeBase64(string s) => Convert.ToBase64String(Encoding.UTF8.GetBytes(s ?? ""));
@@ -255,6 +351,7 @@ namespace DBP_team
                     var message = r["message"]?.ToString() ?? "";
 
                     var bubble = CreateBubble(message, time, whoMine, id);
+                    bubble.SetMessageId(id);
                     if (whoMine)
                     {
                         bool isRead = r["is_read"] != DBNull.Value && Convert.ToInt32(r["is_read"]) == 1;
@@ -272,7 +369,6 @@ namespace DBP_team
             }
         }
 
-        // Ensure chat_files table exists
         private void EnsureChatFilesTableExists()
         {
             try
@@ -287,7 +383,7 @@ namespace DBP_team
                     "created_at DATETIME DEFAULT CURRENT_TIMESTAMP" +
                     ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
             }
-            catch { /* ignore creation errors for now */ }
+            catch { }
         }
 
         private int SaveFileToDb(int senderId, int receiverId, string filename, byte[] content)
@@ -328,7 +424,6 @@ namespace DBP_team
 
                 var row = dt.Rows[0];
                 var fname = row["filename"]?.ToString() ?? fileName ?? "file";
-                // If DB filename lacks extension but the caller provided a filename with extension, append it.
                 try
                 {
                     var dbExt = Path.GetExtension(fname);
@@ -352,9 +447,7 @@ namespace DBP_team
 
                 using (var sfd = new SaveFileDialog())
                 {
-                    // ensure extension preserved
                     sfd.FileName = fname;
-                    // DefaultExt should not contain leading dot
                     var ext = Path.GetExtension(fname);
                     if (!string.IsNullOrEmpty(ext))
                     {
@@ -364,7 +457,6 @@ namespace DBP_team
                     if (sfd.ShowDialog() != DialogResult.OK) return;
                     var outPath = sfd.FileName;
 
-                    // if user did not include extension, append original extension
                     if (string.IsNullOrEmpty(Path.GetExtension(outPath)) && !string.IsNullOrEmpty(Path.GetExtension(fname)))
                     {
                         outPath = outPath + Path.GetExtension(fname);
@@ -388,14 +480,12 @@ namespace DBP_team
         private ChatBubbleControl CreateBubble(string message, DateTime time, bool isMine, int id)
         {
             var bubble = new ChatBubbleControl();
-            // set control width to container width so SetData aligns correctly
             bubble.Width = Math.Max(200, _flow.ClientSize.Width);
             bubble.Tag = Tuple.Create(message, time, isMine, id);
-            // call SetData after width is set
             bubble.SetData(message, time, isMine, _flow.ClientSize.Width);
+            bubble.SetMessageId(id);
             bubble.Margin = new Padding(0, 6, 0, 6);
 
-            // detect file token format: FILE:{fileId}:{filename}
             if (!string.IsNullOrEmpty(message) && message.StartsWith("FILE:", StringComparison.OrdinalIgnoreCase))
             {
                 var parts = message.Split(new[] { ':' }, 3);
@@ -407,7 +497,94 @@ namespace DBP_team
                 }
             }
 
+            bubble.OnEditRequested += Bubble_OnEditRequested;
+            bubble.OnDeleteRequested += Bubble_OnDeleteRequested;
+
             return bubble;
+        }
+
+        private void Bubble_OnEditRequested(int messageId)
+        {
+            try
+            {
+                var dt = DBManager.Instance.ExecuteDataTable("SELECT message FROM chat WHERE id = @id AND sender_id = @me",
+                    new MySqlParameter("@id", messageId), new MySqlParameter("@me", _myUserId));
+                if (dt == null || dt.Rows.Count == 0) return;
+                var oldText = dt.Rows[0]["message"]?.ToString() ?? string.Empty;
+
+                using (var dlg = new InputDialog("메시지 수정", oldText))
+                {
+                    if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                    var newText = dlg.ResultText?.Trim();
+                    if (string.IsNullOrEmpty(newText)) return;
+
+                    DBManager.Instance.ExecuteNonQuery("UPDATE chat SET message = @msg WHERE id = @id AND sender_id = @me",
+                        new MySqlParameter("@msg", newText),
+                        new MySqlParameter("@id", messageId),
+                        new MySqlParameter("@me", _myUserId));
+
+                    // Update my UI immediately
+                    foreach (Control c in _flow.Controls)
+                    {
+                        var b = c as ChatBubbleControl;
+                        if (b == null) continue;
+                        var t = b.Tag as Tuple<string, DateTime, bool, int>;
+                        if (t != null && t.Item4 == messageId)
+                        {
+                            var newTag = Tuple.Create(newText, t.Item2, t.Item3, t.Item4);
+                            b.Tag = newTag;
+                            b.SetData(newText, t.Item2, t.Item3, _flow.ClientSize.Width);
+                            break;
+                        }
+                    }
+
+                    // Notify peer in realtime via chat server
+                    if (_myUserId != _otherUserId)
+                    {
+                        _writer?.WriteLine("EDIT|" + messageId + "|" + EncodeBase64(newText));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("메시지 수정 중 오류: " + ex.Message, "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void Bubble_OnDeleteRequested(int messageId)
+        {
+            try
+            {
+                var confirm = MessageBox.Show("이 메시지를 삭제하시겠습니까?", "삭제", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (confirm != DialogResult.Yes) return;
+
+                DBManager.Instance.ExecuteNonQuery("DELETE FROM chat WHERE id = @id AND sender_id = @me",
+                    new MySqlParameter("@id", messageId), new MySqlParameter("@me", _myUserId));
+
+                // Update my UI immediately
+                for (int i = 0; i < _flow.Controls.Count; i++)
+                {
+                    var b = _flow.Controls[i] as ChatBubbleControl;
+                    if (b == null) continue;
+                    var t = b.Tag as Tuple<string, DateTime, bool, int>;
+                    if (t != null && t.Item4 == messageId)
+                    {
+                        _flow.Controls.RemoveAt(i);
+                        b.Dispose();
+                        break;
+                    }
+                }
+
+                // Notify peer in realtime via chat server
+                if (_myUserId != _otherUserId)
+                {
+                    _writer?.WriteLine("DEL|" + messageId);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("메시지 삭제 중 오류: " + ex.Message, "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void AddBubbleImmediateFile(int fileId, string filename, DateTime time, bool isMine)
@@ -434,7 +611,6 @@ namespace DBP_team
                     if (t != null)
                     {
                         var isMine = t.Item3;
-                        // reset by reapplying SetData which restores panel colors
                         cb.SetData(t.Item1, t.Item2, isMine, _flow.ClientSize.Width);
                         cb.BackColor = Color.Transparent;
                     }
@@ -461,7 +637,6 @@ namespace DBP_team
 
             ClearPreviousHighlights();
 
-            // find all bubbles that contain the query
             foreach (Control c in _flow.Controls)
             {
                 if (c is ChatBubbleControl bubble)
@@ -483,7 +658,6 @@ namespace DBP_team
                 return;
             }
 
-            // highlight all results and focus on first
             for (int i = 0; i < _searchResults.Count; i++)
             {
                 var bubble = _searchResults[i];
@@ -501,14 +675,12 @@ namespace DBP_team
             if (_searchIndex < 0 || _searchIndex >= _searchResults.Count) return;
             var bubble = _searchResults[_searchIndex];
             _flow.ScrollControlIntoView(bubble);
-            // emphasize current one (darker highlight)
             foreach (var b in _searchResults)
             {
                 b.BackColor = Color.FromArgb(255, 255, 220);
             }
             var cur = _searchResults[_searchIndex];
             cur.BackColor = Color.FromArgb(255, 220, 120);
-            // ensure it's in highlighted list
             if (!_highlighted.Contains(cur)) _highlighted.Add(cur);
         }
 
@@ -539,13 +711,36 @@ namespace DBP_team
 
             try
             {
-                // send via TCP to server
+                var sentTime = DateTime.Now;
+
+                if (_myUserId == _otherUserId)
+                {
+                    try
+                    {
+                        DBManager.Instance.ExecuteNonQuery(
+                            "INSERT INTO chat (sender_id, receiver_id, message, created_at, is_read) VALUES (@s,@r,@m,NOW(),1)",
+                            new MySqlParameter("@s", _myUserId),
+                            new MySqlParameter("@r", _otherUserId),
+                            new MySqlParameter("@m", text));
+                        var idObj = DBManager.Instance.ExecuteScalar("SELECT LAST_INSERT_ID()");
+                        int msgId = (idObj != null && idObj != DBNull.Value) ? Convert.ToInt32(idObj) : 0;
+                        AddBubbleImmediate(text, sentTime, true, msgId);
+                    }
+                    catch { AddBubbleImmediate(text, sentTime, true, 0); }
+
+                    txtChat.Clear();
+                    txtChat.Focus();
+                    UpdateRecentList();
+                    return;
+                }
+
+                // 일반 상대에게는 서버로 전송
                 var line = "MSG|" + _myUserId + "|" + _otherUserId + "|" + EncodeBase64(text);
                 _writer?.WriteLine(line);
 
-                var sentTime = DateTime.Now;
                 txtChat.Clear();
                 txtChat.Focus();
+                // Temporary bubble with id 0; will be updated on SENT
                 AddBubbleImmediate(text, sentTime, true, 0);
                 UpdateRecentList();
             }
@@ -564,23 +759,18 @@ namespace DBP_team
 
         private void listView1_SelectedIndexChanged(object sender, EventArgs e)
         {
-            // 현재 사용 안 함
         }
 
         private void txtChat_TextChanged(object sender, EventArgs e)
         {
-            // 필요 시 입력 검증 등 추가
         }
 
         private void ChatForm_Load(object sender, EventArgs e)
         {
-            // 폼 로드시 추가 초기화가 필요하면 작성
         }
 
-        // --- New handlers for search, emoji, file ---
         private void btnEmoji_Click(object sender, EventArgs e)
         {
-            // 간단한 팝업으로 몇 가지 이모티콘을 선택하게 함
             var menu = new ContextMenuStrip();
             var emojis = new[] { "😀", "😁", "😂", "😍", "😢", "😮", "👍", "👎", "🎉" };
             foreach (var em in emojis)
@@ -613,7 +803,6 @@ namespace DBP_team
                 {
                     var bytes = File.ReadAllBytes(path);
 
-                    // If zip, validate header quickly
                     if (Path.GetExtension(path).Equals(".zip", StringComparison.OrdinalIgnoreCase))
                     {
                         if (bytes.Length < 4 || bytes[0] != (byte)'P' || bytes[1] != (byte)'K')
@@ -623,7 +812,6 @@ namespace DBP_team
                         }
                     }
 
-                    // save to DB
                     var fileId = SaveFileToDb(_myUserId, _otherUserId, Path.GetFileName(path), bytes);
                     if (fileId <= 0)
                     {
@@ -631,12 +819,14 @@ namespace DBP_team
                         return;
                     }
 
-                    // send file token via chat server so other side gets notified and message persisted
                     var token = "FILE:" + fileId + ":" + Path.GetFileName(path);
-                    var line = "MSG|" + _myUserId + "|" + _otherUserId + "|" + EncodeBase64(token);
-                    _writer?.WriteLine(line);
 
-                    // locally show file bubble immediately
+                    if (_myUserId != _otherUserId)
+                    {
+                        var line = "MSG|" + _myUserId + "|" + _otherUserId + "|" + EncodeBase64(token);
+                        _writer?.WriteLine(line);
+                    }
+
                     AddBubbleImmediateFile(fileId, Path.GetFileName(path), DateTime.Now, true);
                     UpdateRecentList();
 
@@ -653,7 +843,6 @@ namespace DBP_team
         {
             if (!string.IsNullOrEmpty(message) && message.StartsWith("FILE:", StringComparison.OrdinalIgnoreCase))
             {
-                // message format: FILE:{fileId}:{filename}
                 var parts = message.Split(new[] { ':' }, 3);
                 if (parts.Length == 3 && int.TryParse(parts[1], out int fid))
                 {
@@ -664,12 +853,11 @@ namespace DBP_team
             }
 
             var bubble = CreateBubble(message, time, isMine, id);
-            if (isMine) bubble.SetRead(false); // until READ received
+            if (isMine) bubble.SetRead(false);
             _flow.Controls.Add(bubble);
             _flow.ScrollControlIntoView(bubble);
         }
 
-        // Try to refresh recent list in main form so "내가 마지막으로 보낸" 대화가 바로 갱신되도록 요청
         private void UpdateRecentList()
         {
             try
@@ -687,6 +875,24 @@ namespace DBP_team
                 }
             }
             catch { }
+        }
+
+        private void ApplySentMessageId(int messageId)
+        {
+            // find last my bubble with id 0 and set real id to enable edit/delete context menu
+            for (int i = _flow.Controls.Count - 1; i >= 0; i--)
+            {
+                var b = _flow.Controls[i] as ChatBubbleControl;
+                if (b == null) continue;
+                var t = b.Tag as Tuple<string, DateTime, bool, int>;
+                if (t != null && t.Item3 && t.Item4 == 0)
+                {
+                    b.Tag = Tuple.Create(t.Item1, t.Item2, t.Item3, messageId);
+                    b.SetMessageId(messageId);
+                    b.SetData(t.Item1, t.Item2, t.Item3, _flow.ClientSize.Width);
+                    break;
+                }
+            }
         }
     }
 }
