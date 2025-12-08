@@ -13,6 +13,9 @@ namespace DBP_team.Controls
         private Label lblTime;
         private Label lblRead; // add read indicator
         private Button btnDownload; // added
+        private ContextMenuStrip _cms;
+        private ToolStripMenuItem _miEdit;
+        private ToolStripMenuItem _miDelete;
 
         private const int SIDE_MARGIN = 12;
         private const int DEFAULT_PADDING_H = 8;
@@ -23,7 +26,11 @@ namespace DBP_team.Controls
 
         private int _fileId = 0;
         private string _fileName = null;
+        private int _messageId = 0; // chat table id (0 if not persisted)
+        private bool _isMine = false;
 
+        public event Action<int> OnEditRequested; // messageId
+        public event Action<int> OnDeleteRequested; // messageId
         public event Action<int, string> OnDownloadRequested; // fileId, filename
 
         public ChatBubbleControl()
@@ -66,12 +73,19 @@ namespace DBP_team.Controls
             this.lblTime = new Label();
             this.lblRead = new Label();
             this.btnDownload = new Button();
+            _cms = new ContextMenuStrip();
+            _miEdit = new ToolStripMenuItem("수정");
+            _miDelete = new ToolStripMenuItem("삭제");
+            _cms.Items.AddRange(new ToolStripItem[] { _miEdit, _miDelete });
+            _miEdit.Click += (s, e) => { if (_isMine && _messageId > 0) OnEditRequested?.Invoke(_messageId); };
+            _miDelete.Click += (s, e) => { if (_isMine && _messageId > 0) OnDeleteRequested?.Invoke(_messageId); };
 
             // panelBubble 기본 설정
             this.panelBubble.BackColor = Color.FromArgb(240, 240, 240);
             this.panelBubble.Padding = new Padding(DEFAULT_PADDING_H, DEFAULT_PADDING_V, DEFAULT_PADDING_H, DEFAULT_PADDING_V + 2);
             this.panelBubble.AutoSize = true;
             this.panelBubble.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            this.panelBubble.ContextMenuStrip = _cms;
 
             // lblMessage
             this.lblMessage.AutoSize = true;
@@ -198,6 +212,7 @@ namespace DBP_team.Controls
 
             lblMessage.Text = message ?? string.Empty;
             lblTime.Text = time.ToString("yyyy-MM-dd HH:mm");
+            _isMine = isMine;
 
             // 1) 계산: 퍼센트 기반 폭 + 픽셀 캡 적용 → 절대 최대 폭 결정
             int pctWidth = Math.Max(60, containerWidth * MAX_BUBBLE_PERCENT / 100);
@@ -253,6 +268,19 @@ namespace DBP_team.Controls
 
             UpdateBubbleRegion();
             Invalidate();
+
+            // context menu: enable only for own text messages (not file token)
+            bool isFile = !string.IsNullOrEmpty(message) && message.StartsWith("FILE:", StringComparison.OrdinalIgnoreCase);
+            _miEdit.Enabled = _isMine && !isFile && _messageId > 0;
+            _miDelete.Enabled = _isMine && _messageId > 0;
+        }
+
+        public void SetMessageId(int id)
+        {
+            _messageId = id;
+            // update menu enabled state
+            _miEdit.Enabled = _isMine && _messageId > 0;
+            _miDelete.Enabled = _isMine && _messageId > 0;
         }
 
         private void EnsureInit()

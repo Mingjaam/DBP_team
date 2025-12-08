@@ -21,10 +21,19 @@ namespace DBP_team
         private DateTime _lastPollTime;
         private NotifyIcon _notifyIcon;
 
+        // status image list for online/offline
+        private ImageList _statusImages;
+        private const int IMG_OFFLINE = 0;
+        private const int IMG_ONLINE = 1;
+        private const int IMG_WHITE = 2;
+
         public MainForm()
         {
             InitializeComponent();
             HookTreeEvents();
+
+            // initialize status images
+            InitStatusImages();
 
             // Self chat 버튼 이벤트 연결 (디자이너에 btnSelfChat이 있어야 합니다)
             try
@@ -51,6 +60,43 @@ namespace DBP_team
             // ensure cleanup
             this.FormClosed -= MainForm_FormClosed;
             this.FormClosed += MainForm_FormClosed;
+        }
+
+        private void InitStatusImages()
+        {
+            try
+            {
+                _statusImages = new ImageList();
+                _statusImages.ColorDepth = ColorDepth.Depth32Bit;
+                _statusImages.ImageSize = new Size(12, 12);
+                // gray circle
+                _statusImages.Images.Add(CreateCircleBitmap(Color.Gray, 12)); // index 0
+                // green circle
+                _statusImages.Images.Add(CreateCircleBitmap(Color.Green, 12)); // index 1
+                // white circle for non-user nodes
+                _statusImages.Images.Add(CreateCircleBitmap(Color.White, 12)); // index 2
+                treeViewUser.ImageList = _statusImages;
+            }
+            catch { /* ignore */ }
+        }
+
+        private static Bitmap CreateCircleBitmap(Color color, int size)
+        {
+            var bmp = new Bitmap(size, size);
+            using (var g = Graphics.FromImage(bmp))
+            {
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                g.Clear(Color.Transparent);
+                using (var b = new SolidBrush(color))
+                {
+                    g.FillEllipse(b, 0, 0, size - 1, size - 1);
+                }
+                using (var p = new Pen(Color.FromArgb(100, 0, 0, 0)))
+                {
+                    g.DrawEllipse(p, 0, 0, size - 1, size - 1);
+                }
+            }
+            return bmp;
         }
 
         // User 객체로 초기화
@@ -144,6 +190,28 @@ namespace DBP_team
             treeViewUser.NodeMouseDoubleClick += TreeViewUser_NodeMouseDoubleClick;
         }
 
+        private bool IsUserOnline(int userId)
+        {
+            try
+            {
+                var dt = DBManager.Instance.ExecuteDataTable(
+                    "SELECT activity_type FROM user_activity_logs WHERE user_id = @uid ORDER BY created_at DESC LIMIT 1",
+                    new MySqlParameter("@uid", userId));
+                if (dt != null && dt.Rows.Count > 0)
+                {
+                    var act = dt.Rows[0]["activity_type"]?.ToString();
+                    return string.Equals(act, "LOGIN", StringComparison.OrdinalIgnoreCase);
+                }
+            }
+            catch { }
+            return false;
+        }
+
+        private int GetStatusImageIndex(bool isOnline)
+        {
+            return isOnline ? IMG_ONLINE : IMG_OFFLINE;
+        }
+
         // 트리 노드 더블클릭 핸들러: user:ID 태그를 파싱해 ChatForm 열기
         private void TreeViewUser_NodeMouseDoubleClick(object sender, TreeNodeMouseClickEventArgs e)
         {
@@ -218,7 +286,7 @@ namespace DBP_team
             {
                 if (_companyId <= 0)
                 {
-                    treeViewUser.Nodes.Add(new TreeNode("회사 정보가 없습니다."));
+                    treeViewUser.Nodes.Add(new TreeNode("회사 정보가 없습니다.") { ImageIndex = IMG_WHITE, SelectedImageIndex = IMG_WHITE });
                     return;
                 }
 
@@ -228,7 +296,7 @@ namespace DBP_team
 
                 if (dtDeps == null || dtDeps.Rows.Count == 0)
                 {
-                    treeViewUser.Nodes.Add(new TreeNode("등록된 부서가 없습니다."));
+                    treeViewUser.Nodes.Add(new TreeNode("등록된 부서가 없습니다.") { ImageIndex = IMG_WHITE, SelectedImageIndex = IMG_WHITE });
                     return;
                 }
 
@@ -236,7 +304,7 @@ namespace DBP_team
                 {
                     int depId = Convert.ToInt32(dep["id"]);
                     string depName = dep["name"]?.ToString() ?? $"부서 {depId}";
-                    var depNode = new TreeNode(depName) { Tag = $"department:{depId}" };
+                    var depNode = new TreeNode(depName) { Tag = $"department:{depId}", ImageIndex = IMG_WHITE, SelectedImageIndex = IMG_WHITE };
 
                     var dtTeams = DBManager.Instance.ExecuteDataTable(
                         "SELECT id, name FROM teams WHERE department_id = @did ORDER BY name",
@@ -248,7 +316,7 @@ namespace DBP_team
                         {
                             int teamId = Convert.ToInt32(team["id"]);
                             string teamName = team["name"]?.ToString() ?? $"팀 {teamId}";
-                            var teamNode = new TreeNode(teamName) { Tag = $"team:{teamId}" };
+                            var teamNode = new TreeNode(teamName) { Tag = $"team:{teamId}", ImageIndex = IMG_WHITE, SelectedImageIndex = IMG_WHITE };
 
                             var dtUsersInTeam = DBManager.Instance.ExecuteDataTable(
                                 "SELECT id, full_name, email FROM users WHERE company_id = @cid AND department_id = @did AND team_id = @tid ORDER BY full_name",
@@ -261,15 +329,20 @@ namespace DBP_team
                                 foreach (DataRow u in dtUsersInTeam.Rows)
                                 {
                                     int uid = Convert.ToInt32(u["id"]);
-                                    // 로그인 사용자면 건너뜀
                                     if (uid == _userId) continue;
 
                                     var baseDisplay = u["full_name"]?.ToString();
                                     if (string.IsNullOrWhiteSpace(baseDisplay)) baseDisplay = u["email"]?.ToString() ?? "이름 없음";
-                                    // 멀티프로필 적용 (owner=uid, viewer=_userId)
                                     var mpDisplay = MultiProfileService.GetDisplayNameForViewer(uid, _userId);
                                     if (!string.IsNullOrWhiteSpace(mpDisplay)) baseDisplay = mpDisplay;
-                                    teamNode.Nodes.Add(new TreeNode(baseDisplay) { Tag = $"user:{uid}" });
+                                    bool online = IsUserOnline(uid);
+                                    var userNode = new TreeNode(baseDisplay)
+                                    {
+                                        Tag = $"user:{uid}",
+                                        ImageIndex = GetStatusImageIndex(online),
+                                        SelectedImageIndex = GetStatusImageIndex(online)
+                                    };
+                                    teamNode.Nodes.Add(userNode);
                                 }
                             }
 
@@ -287,14 +360,20 @@ namespace DBP_team
                         foreach (DataRow u in dtUsersNoTeam.Rows)
                         {
                             int uid = Convert.ToInt32(u["id"]);
-                            // 로그인 사용자면 건너뜀
                             if (uid == _userId) continue;
 
                             var baseDisplay = u["full_name"]?.ToString();
                             if (string.IsNullOrWhiteSpace(baseDisplay)) baseDisplay = u["email"]?.ToString() ?? "이름 없음";
                             var mpDisplay = MultiProfileService.GetDisplayNameForViewer(uid, _userId);
                             if (!string.IsNullOrWhiteSpace(mpDisplay)) baseDisplay = mpDisplay;
-                            depNode.Nodes.Add(new TreeNode(baseDisplay) { Tag = $"user:{uid}" });
+                            bool online = IsUserOnline(uid);
+                            var userNode = new TreeNode(baseDisplay)
+                            {
+                                Tag = $"user:{uid}",
+                                ImageIndex = GetStatusImageIndex(online),
+                                SelectedImageIndex = GetStatusImageIndex(online)
+                            };
+                            depNode.Nodes.Add(userNode);
                         }
                     }
 
@@ -732,7 +811,13 @@ namespace DBP_team
                             string deptName = row["department_name"]?.ToString();
                             string nodeText = string.IsNullOrEmpty(deptName) ? baseDisplay : $"{baseDisplay} ({deptName})";
 
-                            var userNode = new TreeNode(nodeText) { Tag = $"user:{uid}" };
+                            bool online = IsUserOnline(uid);
+                            var userNode = new TreeNode(nodeText)
+                            {
+                                Tag = $"user:{uid}",
+                                ImageIndex = GetStatusImageIndex(online),
+                                SelectedImageIndex = GetStatusImageIndex(online)
+                            };
                             searchRootNode.Nodes.Add(userNode);
                         }
                     }

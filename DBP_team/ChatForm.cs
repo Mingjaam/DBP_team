@@ -13,6 +13,7 @@ using System.Threading;
 using System.Linq;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
+using DBP_team.UI;
 
 namespace DBP_team
 {
@@ -255,6 +256,7 @@ namespace DBP_team
                     var message = r["message"]?.ToString() ?? "";
 
                     var bubble = CreateBubble(message, time, whoMine, id);
+                    bubble.SetMessageId(id);
                     if (whoMine)
                     {
                         bool isRead = r["is_read"] != DBNull.Value && Convert.ToInt32(r["is_read"]) == 1;
@@ -393,6 +395,7 @@ namespace DBP_team
             bubble.Tag = Tuple.Create(message, time, isMine, id);
             // call SetData after width is set
             bubble.SetData(message, time, isMine, _flow.ClientSize.Width);
+            bubble.SetMessageId(id);
             bubble.Margin = new Padding(0, 6, 0, 6);
 
             // detect file token format: FILE:{fileId}:{filename}
@@ -407,7 +410,84 @@ namespace DBP_team
                 }
             }
 
+            // wire edit/delete for my messages
+            bubble.OnEditRequested += Bubble_OnEditRequested;
+            bubble.OnDeleteRequested += Bubble_OnDeleteRequested;
+
             return bubble;
+        }
+
+        private void Bubble_OnEditRequested(int messageId)
+        {
+            try
+            {
+                // fetch original text
+                var dt = DBManager.Instance.ExecuteDataTable("SELECT message FROM chat WHERE id = @id AND sender_id = @me",
+                    new MySqlParameter("@id", messageId), new MySqlParameter("@me", _myUserId));
+                if (dt == null || dt.Rows.Count == 0) return;
+                var oldText = dt.Rows[0]["message"]?.ToString() ?? string.Empty;
+
+                using (var dlg = new InputDialog("메시지 수정", oldText))
+                {
+                    if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                    var newText = dlg.ResultText?.Trim();
+                    if (string.IsNullOrEmpty(newText)) return;
+
+                    DBManager.Instance.ExecuteNonQuery("UPDATE chat SET message = @msg WHERE id = @id AND sender_id = @me",
+                        new MySqlParameter("@msg", newText),
+                        new MySqlParameter("@id", messageId),
+                        new MySqlParameter("@me", _myUserId));
+
+                    // update UI bubble
+                    foreach (Control c in _flow.Controls)
+                    {
+                        var b = c as ChatBubbleControl;
+                        if (b == null) continue;
+                        var t = b.Tag as Tuple<string, DateTime, bool, int>;
+                        if (t != null && t.Item4 == messageId)
+                        {
+                            var newTag = Tuple.Create(newText, t.Item2, t.Item3, t.Item4);
+                            b.Tag = newTag;
+                            b.SetData(newText, t.Item2, t.Item3, _flow.ClientSize.Width);
+                            break;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("메시지 수정 중 오류: " + ex.Message, "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void Bubble_OnDeleteRequested(int messageId)
+        {
+            try
+            {
+                var confirm = MessageBox.Show("이 메시지를 삭제하시겠습니까?", "삭제", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (confirm != DialogResult.Yes) return;
+
+                DBManager.Instance.ExecuteNonQuery("DELETE FROM chat WHERE id = @id AND sender_id = @me",
+                    new MySqlParameter("@id", messageId), new MySqlParameter("@me", _myUserId));
+
+                // remove from UI
+                for (int i = 0; i < _flow.Controls.Count; i++)
+                {
+                    var b = _flow.Controls[i] as ChatBubbleControl;
+                    if (b == null) continue;
+                    var t = b.Tag as Tuple<string, DateTime, bool, int>;
+                    if (t != null && t.Item4 == messageId)
+                    {
+                        _flow.Controls.RemoveAt(i);
+                        b.Dispose();
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("메시지 삭제 중 오류: " + ex.Message, "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void AddBubbleImmediateFile(int fileId, string filename, DateTime time, bool isMine)
