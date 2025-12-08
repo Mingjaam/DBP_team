@@ -73,12 +73,13 @@
             // 
             // txtChat
             // 
-            this.txtChat.Multiline = true;
             this.txtChat.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
             | System.Windows.Forms.AnchorStyles.Right)));
             this.txtChat.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             this.txtChat.Font = new System.Drawing.Font("맑은 고딕", 10F);
             this.txtChat.Location = new System.Drawing.Point(12, 12);
+            this.txtChat.Multiline = true;
+            this.txtChat.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
             this.txtChat.Name = "txtChat";
             this.txtChat.Size = new System.Drawing.Size(270, 25);
             this.txtChat.TabIndex = 2;
@@ -86,7 +87,7 @@
             // 
             // btnSend
             // 
-            this.btnSend.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.btnSend.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.btnSend.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(74)))), ((int)(((byte)(144)))), ((int)(((byte)(226)))));
             this.btnSend.FlatAppearance.BorderSize = 0;
             this.btnSend.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
@@ -95,10 +96,6 @@
             this.btnSend.Location = new System.Drawing.Point(396, 10);
             this.btnSend.Name = "btnSend";
             this.btnSend.Size = new System.Drawing.Size(75, 28);
-            this.btnSend.TabIndex = 3;
-            this.btnSend.Text = "전송";
-            this.btnSend.UseVisualStyleBackColor = false;
-            this.btnSend.Click += new System.EventHandler(this.button1_Click);
             // 
             // txtSearch
             // 
@@ -169,7 +166,7 @@
             // 
             // btnEmoji
             // 
-            this.btnEmoji.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.btnEmoji.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.btnEmoji.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(240)))), ((int)(((byte)(240)))), ((int)(((byte)(240)))));
             this.btnEmoji.FlatAppearance.BorderSize = 0;
             this.btnEmoji.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
@@ -184,7 +181,7 @@
             // 
             // btnFile
             // 
-            this.btnFile.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.btnFile.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.btnFile.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(240)))), ((int)(((byte)(240)))), ((int)(((byte)(240)))));
             this.btnFile.FlatAppearance.BorderSize = 0;
             this.btnFile.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
