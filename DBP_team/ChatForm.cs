@@ -93,6 +93,10 @@ namespace DBP_team
 
             lblSearchCount.Text = "0/0";
 
+            // 시간 검색용 DateTimePicker 초기화
+            dtpStartTime.Value = DateTime.Now.AddDays(-7); // 기본값: 7일 전
+            dtpEndTime.Value = DateTime.Now; // 기본값: 현재 시간
+
             txtChat.KeyDown += (s, e) =>
             {
                 if (e.KeyCode == Keys.Enter && !e.Shift)
@@ -696,6 +700,57 @@ namespace DBP_team
         {
             if (_searchResults.Count == 0) return;
             _searchIndex = (_searchIndex - 1 + _searchResults.Count) % _searchResults.Count;
+            lblSearchCount.Text = ($"{_searchIndex + 1}/{_searchResults.Count}");
+            ScrollToSearchIndex();
+        }
+
+        private void btnSearchTime_Click(object sender, EventArgs e)
+        {
+            var startTime = dtpStartTime.Value;
+            var endTime = dtpEndTime.Value;
+
+            if (startTime > endTime)
+            {
+                MessageBox.Show("시작 시간이 종료 시간보다 늦을 수 없습니다.", "검색 오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            ClearPreviousHighlights();
+
+            // 종료 시간을 하루 끝으로 설정 (23:59:59)
+            var endTimeWithTime = endTime.Date.AddDays(1).AddSeconds(-1);
+
+            foreach (Control c in _flow.Controls)
+            {
+                if (c is ChatBubbleControl bubble)
+                {
+                    var t = bubble.Tag as Tuple<string, DateTime, bool, int>;
+                    if (t == null) continue;
+                    var msgTime = t.Item2;
+
+                    // 시간 범위 내에 있는 메시지 찾기
+                    if (msgTime >= startTime && msgTime <= endTimeWithTime)
+                    {
+                        _searchResults.Add(bubble);
+                    }
+                }
+            }
+
+            if (_searchResults.Count == 0)
+            {
+                MessageBox.Show("해당 시간 범위에 일치하는 메시지가 없습니다.", "검색", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                lblSearchCount.Text = "0/0";
+                return;
+            }
+
+            for (int i = 0; i < _searchResults.Count; i++)
+            {
+                var bubble = _searchResults[i];
+                bubble.BackColor = Color.FromArgb(255, 255, 220);
+                _highlighted.Add(bubble);
+            }
+
+            _searchIndex = 0;
             lblSearchCount.Text = ($"{_searchIndex + 1}/{_searchResults.Count}");
             ScrollToSearchIndex();
         }
