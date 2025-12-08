@@ -512,6 +512,7 @@ namespace DBP_team
         private void btnResetPermission_Click(object sender, EventArgs e)
         {
             ResetPermissionUI();
+        }
 
         // --- Chat Ban Management ---
         private void InitializeChatBanUI()
