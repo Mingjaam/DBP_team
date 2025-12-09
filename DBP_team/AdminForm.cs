@@ -703,6 +703,27 @@ namespace DBP_team
             catch { }
         }
 
+        private void LoadBansToListView()
+        {
+            try
+            {
+                var dt = ChatBanDAO.LoadBans();
+                _lvBans.Items.Clear();
+                foreach (DataRow r in dt.Rows)
+                {
+                    var name1 = Convert.ToString(r["name1"]);
+                    var name2 = Convert.ToString(r["name2"]);
+                    var created = r["created_at"] != DBNull.Value ? Convert.ToDateTime(r["created_at"]).ToString("yyyy-MM-dd HH:mm:ss") : "";
+                    var it = new ListViewItem(new[] { name1, name2, created })
+                    {
+                        Tag = new Tuple<int, int>(Convert.ToInt32(r["user_id_1"]), Convert.ToInt32(r["user_id_2"]))
+                    };
+                    _lvBans.Items.Add(it);
+                }
+            }
+            catch { }
+        }
+
         private void btnBlock_Click(object sender, EventArgs e)
         {
             try
@@ -719,9 +740,16 @@ namespace DBP_team
                     MessageBox.Show("동일 사용자끼리는 차단할 수 없습니다.", "안내", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
-                // 차단 테이블이 있다면 여기에 반영. 없으면 UI에만 표시.
-                var item = new ListViewItem(new[] { _cbUser1.Text, _cbUser2.Text, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") });
-                _lvBans.Items.Add(item);
+
+                if (ChatBanDAO.AddBan(a, b))
+                {
+                    LoadBansToListView();
+                    MessageBox.Show("대화 권한이 차단되었습니다.", "완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                else
+                {
+                    MessageBox.Show("차단 저장에 실패했습니다.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             }
             catch (Exception ex)
             {
@@ -738,10 +766,18 @@ namespace DBP_team
                     MessageBox.Show("해제할 항목을 선택하세요.", "안내", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
+                int ok = 0; int fail = 0;
                 foreach (ListViewItem it in _lvBans.SelectedItems)
                 {
-                    _lvBans.Items.Remove(it);
+                    var tag = it.Tag as Tuple<int, int>;
+                    if (tag == null) { fail++; continue; }
+                    if (ChatBanDAO.RemoveBan(tag.Item1, tag.Item2)) ok++; else fail++;
                 }
+                LoadBansToListView();
+                if (fail == 0)
+                    MessageBox.Show("차단이 해제되었습니다.", "완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                else
+                    MessageBox.Show($"일부 항목 해제 실패: 성공 {ok}, 실패 {fail}", "오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             catch (Exception ex)
             {

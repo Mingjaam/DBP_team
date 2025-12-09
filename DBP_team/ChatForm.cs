@@ -940,7 +940,7 @@ namespace DBP_team
             }
             catch { }
         }
-<<<<<<< HEAD
+
 
         private void ApplySentMessageId(int messageId)
         {
@@ -957,7 +957,9 @@ namespace DBP_team
                     b.SetData(t.Item1, t.Item2, t.Item3, _flow.ClientSize.Width);
                     break;
                 }
-=======
+            }
+        }
+
         private void AdjustTextBoxHeight()
         {
             if (txtChat == null || pnlBottom == null) return;
@@ -987,7 +989,7 @@ namespace DBP_team
             {
                 txtChat.Height = textHeight;
                 pnlBottom.Height = topPadding + textHeight + bottomPadding;
->>>>>>> 3d35fdb5b24dc34abddd7222ec3b71d74001855f
+
             }
         }
     }
