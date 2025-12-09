@@ -784,5 +784,10 @@ namespace DBP_team
                 MessageBox.Show("차단 해제 중 오류: " + ex.Message, "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
+
+        private void lblTeamSelect_Click(object sender, EventArgs e)
+        {
+
+        }
     }
 }
