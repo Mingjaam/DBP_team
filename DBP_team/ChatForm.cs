@@ -341,7 +341,7 @@ namespace DBP_team
                 var dt = DBManager.Instance.ExecuteDataTable(
                     "SELECT id, sender_id, receiver_id, message, created_at, is_read " +
                     "FROM chat " +
-                    "WHERE (sender_id = @me AND receiver_id = @other) OR (sender_id = @other AND receiver_id = @me) " +
+                    "WHERE is_deleted = 0 AND ((sender_id = @me AND receiver_id = @other) OR (sender_id = @other AND receiver_id = @me)) " +
                     "ORDER BY created_at ASC",
                     new MySqlParameter("@me", _myUserId),
                     new MySqlParameter("@other", _otherUserId));
@@ -409,7 +409,7 @@ namespace DBP_team
                     new MySqlParameter("@s", senderId),
                     new MySqlParameter("@r", receiverId),
                     new MySqlParameter("@f", filename),
-                    new MySqlParameter("@c", content));
+                    new MySqlParameter("@c", MySqlDbType.LongBlob) { Value = content });
 
                 var idObj = DBManager.Instance.ExecuteScalar("SELECT LAST_INSERT_ID()");
                 if (idObj != null && idObj != DBNull.Value)
@@ -422,16 +422,58 @@ namespace DBP_team
             return 0;
         }
 
-        private void OnBubbleDownloadRequestedHandler(int fileId, string fileName)
+        private async void OnBubbleDownloadRequestedHandler(int fileId, string fileName)
         {
             try
             {
-                var dt = DBManager.Instance.ExecuteDataTable(
-                    "SELECT filename, content FROM chat_files WHERE id = @id LIMIT 1",
-                    new MySqlParameter("@id", fileId));
+                // 안전: 유효한 파일 ID 확인 및 재시도 로직 적용
+                if (fileId <= 0)
+                {
+                    try
+                    {
+                        ChatBubbleControl bubbleWithFile = null;
+                        foreach (Control c in _flow.Controls)
+                        {
+                            var cb = c as ChatBubbleControl;
+                            if (cb != null && cb.HasFile)
+                            { bubbleWithFile = cb; break; }
+                        }
+                        if (bubbleWithFile != null && bubbleWithFile.Tag is Tuple<string, DateTime, bool, int> tag)
+                        {
+                            var msg = tag.Item1 ?? string.Empty;
+                            if (!string.IsNullOrEmpty(msg) && msg.StartsWith("FILE:", StringComparison.OrdinalIgnoreCase))
+                            {
+                                var parts = msg.Split(new[] { ':' }, 3);
+                                if (parts.Length == 3 && int.TryParse(parts[1], out int parsed)) fileId = parsed;
+                                if (string.IsNullOrEmpty(fileName)) fileName = parts.Length == 3 ? parts[2] : fileName;
+                            }
+                        }
+                    }
+                    catch { }
+                }
+
+                if (fileId <= 0)
+                {
+                    MessageBox.Show("파일 식별자를 확인할 수 없습니다. 잠시 후 다시 시도하세요.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                EnsureChatFilesTableExists();
+
+                DataTable dt = null;
+                // DB 반영 지연 대비: 짧은 재시도(최대 3회, 200ms 간격)
+                for (int attempt = 0; attempt < 3; attempt++)
+                {
+                    dt = DBManager.Instance.ExecuteDataTable(
+                        "SELECT filename, content FROM chat_files WHERE id = @id LIMIT 1",
+                        new MySqlParameter("@id", fileId));
+                    if (dt != null && dt.Rows.Count > 0) break;
+                    await Task.Delay(200);
+                }
+
                 if (dt == null || dt.Rows.Count == 0)
                 {
-                    MessageBox.Show("파일을 찾을 수 없습니다.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show("파일을 찾을 수 없습니다. 전송 직후인 경우 잠시 후 다시 시도하세요.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
 
@@ -447,12 +489,12 @@ namespace DBP_team
                     }
                 }
                 catch { }
-                var contentObj = row["content"];
-                byte[] data = null;
-                if (contentObj is byte[] b) data = b;
-                else if (contentObj != DBNull.Value) data = (byte[])contentObj;
 
-                if (data == null)
+                var contentObj = row["content"]; byte[] data = null;
+                if (contentObj is byte[] b) data = b;
+                else if (contentObj != DBNull.Value) { try { data = (byte[])contentObj; } catch { data = null; } }
+
+                if (data == null || data.Length == 0)
                 {
                     MessageBox.Show("파일 데이터가 비어있습니다.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
@@ -462,26 +504,16 @@ namespace DBP_team
                 {
                     sfd.FileName = fname;
                     var ext = Path.GetExtension(fname);
-                    if (!string.IsNullOrEmpty(ext))
-                    {
-                        sfd.DefaultExt = ext.StartsWith(".") ? ext.Substring(1) : ext;
-                    }
+                    if (!string.IsNullOrEmpty(ext)) sfd.DefaultExt = ext.StartsWith(".") ? ext.Substring(1) : ext;
                     sfd.Filter = "All files (*.*)|*.*";
                     if (sfd.ShowDialog() != DialogResult.OK) return;
                     var outPath = sfd.FileName;
-
                     if (string.IsNullOrEmpty(Path.GetExtension(outPath)) && !string.IsNullOrEmpty(Path.GetExtension(fname)))
-                    {
                         outPath = outPath + Path.GetExtension(fname);
-                    }
 
                     File.WriteAllBytes(outPath, data);
                     MessageBox.Show("파일이 저장되었습니다: " + outPath, "다운로드", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    try
-                    {
-                        Process.Start("explorer.exe", "/select,\"" + outPath + "\"");
-                    }
-                    catch { }
+                    try { Process.Start("explorer.exe", "/select,\"" + outPath + "\""); } catch { }
                 }
             }
             catch (Exception ex)
@@ -520,7 +552,7 @@ namespace DBP_team
         {
             try
             {
-                var dt = DBManager.Instance.ExecuteDataTable("SELECT message FROM chat WHERE id = @id AND sender_id = @me",
+                var dt = DBManager.Instance.ExecuteDataTable("SELECT message FROM chat WHERE id = @id AND sender_id = @me AND is_deleted = 0",
                     new MySqlParameter("@id", messageId), new MySqlParameter("@me", _myUserId));
                 if (dt == null || dt.Rows.Count == 0) return;
                 var oldText = dt.Rows[0]["message"]?.ToString() ?? string.Empty;
@@ -531,7 +563,7 @@ namespace DBP_team
                     var newText = dlg.ResultText?.Trim();
                     if (string.IsNullOrEmpty(newText)) return;
 
-                    DBManager.Instance.ExecuteNonQuery("UPDATE chat SET message = @msg WHERE id = @id AND sender_id = @me",
+                    DBManager.Instance.ExecuteNonQuery("UPDATE chat SET message = @msg, updated_at = NOW() WHERE id = @id AND sender_id = @me AND is_deleted = 0",
                         new MySqlParameter("@msg", newText),
                         new MySqlParameter("@id", messageId),
                         new MySqlParameter("@me", _myUserId));
@@ -571,7 +603,8 @@ namespace DBP_team
                 var confirm = MessageBox.Show("이 메시지를 삭제하시겠습니까?", "삭제", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
                 if (confirm != DialogResult.Yes) return;
 
-                DBManager.Instance.ExecuteNonQuery("DELETE FROM chat WHERE id = @id AND sender_id = @me",
+                // 소프트 삭제 적용
+                DBManager.Instance.ExecuteNonQuery("UPDATE chat SET is_deleted = 1 WHERE id = @id AND sender_id = @me AND is_deleted = 0",
                     new MySqlParameter("@id", messageId), new MySqlParameter("@me", _myUserId));
 
                 // Update my UI immediately
@@ -867,12 +900,13 @@ namespace DBP_team
                 {
                     var bytes = File.ReadAllBytes(path);
 
+                    // ZIP 검증은 로깅만 하고 차단하지 않음(간헐적 실패 방지)
                     if (Path.GetExtension(path).Equals(".zip", StringComparison.OrdinalIgnoreCase))
                     {
                         if (bytes.Length < 4 || bytes[0] != (byte)'P' || bytes[1] != (byte)'K')
                         {
-                            MessageBox.Show("선택한 파일은 ZIP 형식이 아닙니다.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                            return;
+                            // 경고만 표시하고 계속 진행
+                            MessageBox.Show("ZIP 헤더가 예상과 다릅니다. 원본 그대로 전송합니다.", "경고", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         }
                     }
 

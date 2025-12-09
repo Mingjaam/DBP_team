@@ -174,6 +174,7 @@ namespace DBP_team.Controls
             // 컨트롤 높이
             this.Height = panelBubble.Height + 6;
 
+            // 둥근 모서리 적용
             UpdateBubbleRegion();
         }
 
@@ -305,16 +306,24 @@ namespace DBP_team.Controls
             this.PerformLayout();
         }
 
+        // 파일 첨부 여부 노출
+        public bool HasFile { get { return _fileId > 0 && !string.IsNullOrEmpty(_fileName); } }
+
         public void SetFile(int fileId, string fileName)
         {
             _fileId = fileId;
             _fileName = fileName;
-            if (!string.IsNullOrEmpty(fileName))
+            EnsureInit();
+            if (btnDownload != null)
             {
-                lblMessage.Text = fileName;
+                btnDownload.Visible = true;
+                btnDownload.Enabled = _fileId > 0;
+                btnDownload.Text = string.IsNullOrEmpty(_fileName) ? "파일" : _fileName;
             }
-            btnDownload.Visible = true;
-            this.PerformLayout();
+            if (lblMessage != null)
+            {
+                lblMessage.Text = string.IsNullOrEmpty(_fileName) ? "파일 첨부" : _fileName;
+            }
         }
     }
 }
